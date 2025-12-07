@@ -1,0 +1,31 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "author": "Abhishek Santra",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-ecs": "^3.651.1",
+    "@aws-sdk/client-s3": "^3.651.1",
+    "@aws-sdk/s3-request-presigner": "^3.651.1",
+    "axios": "^1.7.7",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-session": "^1.18.0",
+    "ioredis": "^5.4.1",
+    "mongoose": "^8.6.2",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
