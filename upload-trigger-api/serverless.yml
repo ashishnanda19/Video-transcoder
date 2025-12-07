@@ -1,0 +1,20 @@
+service: upload-trigger-api
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ap-south-1
+  environment:
+    basePath: ./
+    API_ENDPOINT: ${env:API_ENDPOINT}
+
+plugins:
+  - serverless-offline
+  - serverless-dotenv-plugin
+useDotenv: true
+
+functions:
+  api:
+    handler: index.handler
+
