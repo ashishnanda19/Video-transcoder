@@ -97,4 +97,5 @@ To get started with the project, follow these steps:
 
 ---
 
-If you find this project useful, please consider giving it a ⭐ on GitHub!
+**If you find this project useful, please consider giving it a ⭐ on GitHub!**
+
