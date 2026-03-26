@@ -7,7 +7,7 @@
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
-  "author": "Abhishek Santra",
+  "author": "Ashish Kumar Nanda",
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-ecs": "^3.651.1",

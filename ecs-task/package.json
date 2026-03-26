@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js"
   },
-  "author": "Abhishek Santra",
+  "author": "Ashish Kumar Nanda",
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.616.0",
