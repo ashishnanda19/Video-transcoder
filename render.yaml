@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: video-transcoder-server
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8000
+      - key: MONGO_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: MY_AWS_ACCESS_KEY_ID
+        sync: false
+      - key: MY_AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: TEMP_S3_BUCKET_NAME
+        sync: false
+      - key: FINAL_S3_BUCKET_NAME
+        sync: false
+      - key: CLUSTER
+        sync: false
+      - key: TASK
+        sync: false
+      - key: ECS_SUBNETS
+        sync: false
+      - key: ECS_SECURITY_GROUP
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: WEBHOOK_URL
+        sync: false

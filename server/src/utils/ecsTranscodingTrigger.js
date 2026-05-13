@@ -11,10 +11,19 @@ const ecsClient = new ECSClient({
 const config = {
   CLUSTER: process.env.CLUSTER,
   TASK: process.env.TASK,
+  // VPC networking — set these after creating your ECS cluster
+  SUBNETS: (process.env.ECS_SUBNETS || "").split(",").filter(Boolean),
+  SECURITY_GROUP: process.env.ECS_SECURITY_GROUP,
 };
 
 const triggerTranscodingJob = async (job) => {
   try {
+    if (!config.SUBNETS.length || !config.SECURITY_GROUP) {
+      throw new Error(
+        "ECS_SUBNETS and ECS_SECURITY_GROUP environment variables must be set."
+      );
+    }
+
     const command = new RunTaskCommand({
       cluster: config.CLUSTER,
       taskDefinition: config.TASK,
@@ -23,17 +32,12 @@ const triggerTranscodingJob = async (job) => {
       networkConfiguration: {
         awsvpcConfiguration: {
           assignPublicIp: "ENABLED",
-          subnets: [
-            "subnet-02b30ac0493d3972d",
-            "subnet-0fba3b45b9f5ab09b",
-            "subnet-0f33f0744c776377d",
-          ],
-          securityGroups: ["sg-01d4a18fd86ec3ac9"],
+          subnets: config.SUBNETS,
+          securityGroups: [config.SECURITY_GROUP],
         },
       },
       overrides: {
         containerOverrides: [
-          //env variable
           {
             name: "video-transcoder",
             environment: [
