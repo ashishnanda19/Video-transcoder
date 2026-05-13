@@ -42,23 +42,31 @@ const triggerTranscodingJob = async (job) => {
             name: "video-transcoder",
             environment: [
               { name: "OBJECT_KEY", value: job.objectKey },
+              { name: "KEY", value: job.objectKey }, // Alias for older code
               {
                 name: "TEMP_S3_BUCKET_NAME",
-                value: process.env.TEMP_S3_BUCKET_NAME,
+                value: process.env.TEMP_S3_BUCKET_NAME || "video-transcoder-temp-ashish",
               },
               {
+                name: "BUCKET",
+                value: process.env.TEMP_S3_BUCKET_NAME || "video-transcoder-temp-ashish",
+              }, // Alias for older code
+              {
                 name: "FINAL_S3_BUCKET_NAME",
-                value: process.env.FINAL_S3_BUCKET_NAME,
+                value: process.env.FINAL_S3_BUCKET_NAME || "video-transcoder-final-ashish",
               },
               {
                 name: "AWS_ACCESS_KEY_ID",
-                value: process.env.MY_AWS_ACCESS_KEY_ID,
+                value: process.env.AWS_ACCESS_KEY_ID || process.env.MY_AWS_ACCESS_KEY_ID,
               },
               {
                 name: "AWS_SECRET_ACCESS_KEY",
-                value: process.env.MY_AWS_SECRET_ACCESS_KEY,
+                value: process.env.AWS_SECRET_ACCESS_KEY || process.env.MY_AWS_SECRET_ACCESS_KEY,
               },
-              { name: "WEBHOOK_URL", value: process.env.WEBHOOK_URL },
+              {
+                name: "WEBHOOK_URL",
+                value: process.env.WEBHOOK_URL || "https://video-transcoder-server-vvep.onrender.com/api/v1/video/transcode",
+              },
             ],
           },
         ],
