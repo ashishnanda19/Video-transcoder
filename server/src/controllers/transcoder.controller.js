@@ -52,7 +52,7 @@ const handleS3Trigger = asyncHandler(async (req, res) => {
   // await setKey(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT, 0)
 
   const currentJobCount = parseInt(
-    await getKey(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT)
+    (await getKey(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT)) || 0
   );
 
   console.log("current job count: ", currentJobCount);
