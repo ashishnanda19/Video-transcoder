@@ -36,6 +36,11 @@ const Page = () => {
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [modalIsOpen, setIsOpen] = useState<boolean>(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // VID-20230429-WA0030-360p.mp4
 
@@ -182,6 +187,8 @@ const Page = () => {
     });
   };
 
+  if (!mounted) return null;
+
   return (
     <main className="flex-grow p-6">
       <div className="flex justify-between items-center mb-4">
@@ -226,7 +233,12 @@ const Page = () => {
               </TableCell>
               <TableCell>{videoData.createdAt}</TableCell>
               <TableCell>
-                <Button onClick={handlePreview}>Preview</Button>
+                <Button 
+                  onClick={handlePreview} 
+                  disabled={videoData.progress !== "completed"}
+                >
+                  Preview
+                </Button>
               </TableCell>
             </TableRow>
           </TableBody>

@@ -28,10 +28,11 @@ const connectPassport = () => {
             user = await User.create(newUser);
           }
 
+          console.log("DEBUG: Found/Created User:", user.email);
           done(null, user);
         } catch (error) {
-          // Consider creating a custom error object with details
-          done(new Error("Error during Google authentication"), null);
+          console.error("DEBUG: Google Auth Database Error:", error);
+          done(error, null);
         }
       }
     )

@@ -65,7 +65,7 @@ const triggerTranscodingJob = async (job) => {
               },
               {
                 name: "WEBHOOK_URL",
-                value: process.env.WEBHOOK_URL || "https://video-transcoder-server-vvep.onrender.com/api/v1/video/transcode",
+                value: process.env.WEBHOOK_URL || "https://video-transcoder-server-vvep.onrender.com/api/v1/video/ecs-trigger",
               },
             ],
           },
