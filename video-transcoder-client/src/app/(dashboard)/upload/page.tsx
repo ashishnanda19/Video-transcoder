@@ -70,7 +70,8 @@ const Page = () => {
 
       // Fetch pre-signed URL
       const { data } = await axios.get(
-        `${SERVER}/video/get-upload-url?fileName=${name}&contentType=${type}`
+        `${SERVER}/video/get-upload-url?fileName=${name}&contentType=${type}`,
+        { withCredentials: true }
       );
 
       const url = data.data;

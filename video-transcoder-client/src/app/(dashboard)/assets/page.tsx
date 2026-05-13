@@ -42,7 +42,7 @@ const Page = () => {
   useEffect(() => {
     const fetchVideo = () => {
       axios
-        .get(`${SERVER}/video/v/${fileName}`)
+        .get(`${SERVER}/video/v/${fileName}`, { withCredentials: true })
         // .get(
         //   `https://ecezbkpsc5.execute-api.ap-south-1.amazonaws.com/api/v1/video/v/VID-20230429-WA0030`
         // )
@@ -61,7 +61,7 @@ const Page = () => {
     if (videoData) {
       const fetchVideoStatus = () => {
         axios
-          .get(`${SERVER}/video/s/${videoData._id}`)
+          .get(`${SERVER}/video/s/${videoData._id}`, { withCredentials: true })
           .then((response) => {
             // console.log(response.data.data);
             setVideoStatus(response.data.data);
@@ -114,7 +114,8 @@ const Page = () => {
         // console.log(url);
 
         const { data } = await axios.get(
-          `${SERVER}/video/get-video-urls?fileName=${fileName}&videoUrl=${videoUrl}`
+          `${SERVER}/video/get-video-urls?fileName=${fileName}&videoUrl=${videoUrl}`,
+          { withCredentials: true }
         );
 
         const url = data.data;
@@ -161,7 +162,8 @@ const Page = () => {
 
         // const { url } = await res.json();
         const { data } = await axios.get(
-          `${SERVER}/video/get-video-urls?fileName=${fileName}&videoUrl=${videoUrl}`
+          `${SERVER}/video/get-video-urls?fileName=${fileName}&videoUrl=${videoUrl}`,
+          { withCredentials: true }
         );
 
         const url = data.data;
