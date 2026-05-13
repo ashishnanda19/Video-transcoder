@@ -32,7 +32,7 @@ export const GET = async (req: Request) => {
     }
 
     const command = new PutObjectCommand({
-      Bucket: "video-transcoder-temp",
+      Bucket: "video-transcoder-temp-ashish",
       Key: `uploads/videos/${fileName}`,
       ContentType: `${contentType}`,
     });

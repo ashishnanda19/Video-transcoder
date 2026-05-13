@@ -14,6 +14,8 @@ const s3Client = new S3Client({
   },
 });
 
+export const dynamic = "force-dynamic";
+
 export const GET = async (req: Request) => {
     try {
       const url = new URL(req.url!);
@@ -36,7 +38,7 @@ export const GET = async (req: Request) => {
     //   videos/VID-20230429-WA0030/VID-20230429-WA0030-1080p.mp4
   
       const command = new GetObjectCommand({
-        Bucket: "video-transcoder-final",
+        Bucket: "video-transcoder-final-ashish",
         Key: `videos/${fileName}/${videoUrl}`,
       });
   
