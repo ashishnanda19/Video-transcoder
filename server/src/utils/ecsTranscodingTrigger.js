@@ -3,8 +3,8 @@ const { ECSClient, RunTaskCommand } = require("@aws-sdk/client-ecs");
 const ecsClient = new ECSClient({
   region: "ap-south-1",
   credentials: {
-    accessKeyId: process.env.MY_AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.MY_AWS_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || process.env.MY_AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || process.env.MY_AWS_SECRET_ACCESS_KEY,
   },
 });
 
@@ -75,7 +75,10 @@ const triggerTranscodingJob = async (job) => {
 
     await ecsClient.send(command);
   } catch (error) {
-    console.error("An error occurred while triggering transcoding job:", error);
+    console.error("An error occurred while triggering transcoding job:");
+    console.error("Error Name:", error.name);
+    console.error("Error Message:", error.message);
+    if (error.$metadata) console.error("Metadata:", error.$metadata);
     throw error;
   }
 };

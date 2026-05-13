@@ -3,8 +3,14 @@ const { DB_NAME } = require("../constants.js");
 
 const connectDB = async () => {
   try {
+    const baseUri = process.env.MONGO_URI.endsWith("/")
+      ? process.env.MONGO_URI.slice(0, -1)
+      : process.env.MONGO_URI;
+
     const connectionInstance = await mongoose.connect(
-      `${process.env.MONGO_URI}/${DB_NAME}`
+      baseUri.includes("?") 
+        ? baseUri.replace("?", `/${DB_NAME}?`) 
+        : `${baseUri}/${DB_NAME}`
     );
 
     // console.log(connectionInstance);
