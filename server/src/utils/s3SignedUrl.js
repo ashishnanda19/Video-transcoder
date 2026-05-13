@@ -7,8 +7,8 @@ const {
 
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
-const accessKeyId = process.env.MY_AWS_ACCESS_KEY_ID;
-const secretAccessKey = process.env.MY_AWS_SECRET_ACCESS_KEY;
+const accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.MY_AWS_ACCESS_KEY_ID;
+const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.MY_AWS_SECRET_ACCESS_KEY;
 
 const s3Client = new S3Client({
   region: "ap-south-1",
@@ -50,7 +50,7 @@ async function putObjectURL(fileName, contentType, bucketName) {
 async function deleteObjectFile(key) {
   try {
     const command = new DeleteObjectCommand({
-      Bucket: process.env.TEMP_S3_BUCKET_NAME,
+      Bucket: process.env.TEMP_S3_BUCKET_NAME || "video-transcoder-temp-ashish",
       Key: key,
     });
 
