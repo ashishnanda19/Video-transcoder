@@ -38,6 +38,10 @@ services:
         sync: false
       - key: GPU_CAPACITY_PROVIDER
         sync: false
+      - key: GPU_ASG_MAX_SIZE
+        value: 2
+      - key: MAX_CONCURRENT_JOBS
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

@@ -101,6 +101,33 @@ const decrement = async (key) => {
   return value;
 };
 
+// Atomic check-and-increment of the running-jobs counter. A plain GET then INCR lets two concurrent callers
+// (the poll loop and a webhook) both see a free slot and overshoot the limit.
+const ACQUIRE_SLOT_LUA = `
+local c = tonumber(redis.call('GET', KEYS[1]) or '0')
+if c < tonumber(ARGV[1]) then
+  redis.call('INCR', KEYS[1])
+  return 1
+end
+return 0`;
+
+// Decrement that can never push the counter below zero (duplicate webhooks, manual resets).
+const RELEASE_SLOT_LUA = `
+local c = tonumber(redis.call('GET', KEYS[1]) or '0')
+if c > 0 then return redis.call('DECR', KEYS[1]) end
+return 0`;
+
+const acquireSlot = async (max) =>
+  (await redis.eval(ACQUIRE_SLOT_LUA, 1, REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT, max)) === 1;
+
+const releaseSlot = async () =>
+  redis.eval(RELEASE_SLOT_LUA, 1, REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT);
+
+// Queue is LPUSH (enqueue) / RPOP (dequeue) = FIFO; RPUSH puts a job back at the front of the line.
+const requeueJobAtFront = async (job) => {
+  return await redis.rpush(REDIS_KEYS.VIDEO_TRANSCODING_QUEUE, JSON.stringify(job));
+};
+
 const getQueueLength = async () => {
   return await redis.llen(REDIS_KEYS.VIDEO_TRANSCODING_QUEUE);
 };
@@ -126,4 +153,7 @@ module.exports = {
   increment,
   decrement,
   getQueueLength,
+  acquireSlot,
+  releaseSlot,
+  requeueJobAtFront,
 };

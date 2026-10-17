@@ -1,19 +1,11 @@
 const { asyncHandler } = require("../utils/asyncHandler.js");
 
 
-const {
-  getKey,
-  enqueueJobInQueue,
-  deQueueJobFromQueue,
-  increment,
-  decrement,
-  getQueueLength,
-  setKey,
-} = require("../db/redis.js");
+const { enqueueJobInQueue } = require("../db/redis.js");
 
-const { REDIS_KEYS, VIDEO_PROCESS_STATES } = require("../constants.js");
+const { VIDEO_PROCESS_STATES } = require("../constants.js");
 
-const { triggerTranscodingJob } = require("../utils/ecsTranscodingTrigger.js");
+const { dispatchAvailable, onJobFinished } = require("../jobs/jobDispatcher.js");
 const Video = require("../models/video.model.js");
 
 const { deleteObjectFile } = require("../utils/s3SignedUrl.js");
@@ -48,21 +40,7 @@ const handleS3Trigger = asyncHandler(async (req, res) => {
    */
 
   const key = s3EventData.object.key;
-  // const key = "uploads/videos/VID-20230711-WA0065.mp4";
-  // await setKey(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT, 0)
-
-  const currentJobCount = parseInt(
-    (await getKey(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT)) || 0
-  );
-
-  console.log("current job count: ", currentJobCount);
-
-  // key = 'uploads/videos/VID-20230711-WA0065.mp4';
   const fileName = key.split("/").pop().split(".")[0];
-
-  // await connectDB();
-
-  
 
   const video = await Video.create({
     fileName: fileName,
@@ -70,73 +48,39 @@ const handleS3Trigger = asyncHandler(async (req, res) => {
     progress: VIDEO_PROCESS_STATES.PENDING,
   });
 
-
   if (!video) {
     return res.status(500).json({
       message: "Failed to create video. Please try again later.",
     });
   }
 
-  if (currentJobCount <= 5) {
-    await increment(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT);
+  // Every job goes through the queue so ordering and the concurrency limit have a single code path.
+  // If a slot is free (and, on GPU, the ASG is scaling 0 -> 1) it is dispatched immediately; otherwise it
+  // simply waits in Redis for the next freed slot.
+  await enqueueJobInQueue({
+    fileName,
+    objectKey: key,
+    progress: VIDEO_PROCESS_STATES.QUEUED,
+  });
+  video.progress = VIDEO_PROCESS_STATES.QUEUED;
+  await video.save();
 
-    const job = {
-      fileName,
-      objectKey: key,
-      progress: VIDEO_PROCESS_STATES.STARTING,
-    };
-
-    await triggerTranscodingJob(job);
-
-    console.log("Triggered transcoding job");
-
-    /*
-    const video = await Video.create({
-      fileName: fileName,
-      objectKey: key,
-      owner:req.user._id,
-      progress: VIDEO_PROCESS_STATES.PROCESSING,
-    });
-
-    if (!video) {
-      return res.status(500).json({
-        message: "Failed to create video. Please try again later.",
-      });
-    }
-    */
-
-    await Video.findOneAndUpdate(
-      { objectKey: job.objectKey },
-      {
-        $set: { progress: job.progress },
-      }
-    );
-
-    return res.status(200).json({
-      message: "Video transcoding job triggered for " + fileName,
-    });
-  } else {
-    //enqueue the job
-    const job = {
-      fileName,
-      objectKey: key,
-      progress: VIDEO_PROCESS_STATES.QUEUED,
-    };
-
-    await enqueueJobInQueue(job);
-
-    return res.status(200).json({
-      message: "Job enqueued successfully for " + fileName,
-    });
+  try {
+    await dispatchAvailable();
+  } catch (error) {
+    // The job is safely queued; the poll loop will retry.
+    console.error("Dispatch after enqueue failed:", error);
   }
+
+  return res.status(200).json({
+    message: "Video transcoding job accepted for " + fileName,
+  });
 });
 
 const handleECSTrigger = asyncHandler(async (req, res) => {
   console.log("Trigger from ECS.....");
   //webhook
   const { key, progress, videoResolutions } = req.body;
-
-  // await connectDB();
 
   const video = await Video.findOne({ objectKey: key });
 
@@ -145,7 +89,7 @@ const handleECSTrigger = asyncHandler(async (req, res) => {
   }
 
   if (progress === VIDEO_PROCESS_STATES.PROCESSING) {
-    // The container is up (STARTING -> PROCESSING). The job still holds its slot, so don't decrement.
+    // The container is up (STARTING -> PROCESSING). The job still holds its slot, so don't release it.
     // Never move a finished job backwards if pings arrive out of order.
     if (video.progress === VIDEO_PROCESS_STATES.STARTING || video.progress === VIDEO_PROCESS_STATES.QUEUED) {
       video.progress = VIDEO_PROCESS_STATES.PROCESSING;
@@ -154,63 +98,31 @@ const handleECSTrigger = asyncHandler(async (req, res) => {
     return res.status(200).json({ message: "Processing state recorded" });
   }
 
+  if (progress !== VIDEO_PROCESS_STATES.COMPLETED && progress !== VIDEO_PROCESS_STATES.FAILED) {
+    return res.status(400).json({ message: `Unknown progress "${progress}"` });
+  }
+
+  // A retried webhook must not release a second slot for the same job.
+  const alreadyFinished =
+    video.progress === VIDEO_PROCESS_STATES.COMPLETED || video.progress === VIDEO_PROCESS_STATES.FAILED;
+
   if (progress === VIDEO_PROCESS_STATES.COMPLETED) {
     video.progress = VIDEO_PROCESS_STATES.COMPLETED;
     video.videoResolutions = videoResolutions;
     await video.save();
     await deleteObjectFile(key); // deleted the file from temp s3 bucket
-  }
-
-  if (progress === VIDEO_PROCESS_STATES.FAILED) {
+  } else {
     video.progress = VIDEO_PROCESS_STATES.FAILED;
     video.videoResolutions = videoResolutions;
     await video.save();
   }
 
-  await decrement(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT);
+  // Free this job's slot and immediately start the next queued job(s).
+  const started = alreadyFinished ? await dispatchAvailable() : await onJobFinished();
 
-  const currentJobCount = parseInt(
-    await getKey(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT)
-  );
-
-  const queueLength = await getQueueLength();
-
-  if (queueLength === 0) {
-    if (currentJobCount > 0) {
-      await setKey(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT, 0);
-    }
-
-    console.log("Trigger from ECS: Processing queue is empty.");
-    return res.status(200).json({
-      message: "Trigger from ECS: Queue is empty",
-    });
-  }
-
-  const availableSlots = 5 - currentJobCount;
-
-  if (availableSlots > 0) {
-    for (const i = 0; i < availableSlots; i++) {
-      let job = await deQueueJobFromQueue();
-      job.progress = VIDEO_PROCESS_STATES.STARTING;
-
-      await increment(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT);
-      await triggerTranscodingJob(job);
-
-      await Video.findOneAndUpdate(
-        { objectKey: job.objectKey },
-        {
-          $set: { progress: job.progress },
-        }
-      );
-
-      console.log("Transcoding job triggered successfully for:", job.fileName);
-    }
-
-    return res.status(200).json({
-      message:
-        "Trigger from ECS: " + availableSlots + " jobs triggered successfully",
-    });
-  }
+  return res.status(200).json({
+    message: `Trigger from ECS: ${started} queued job(s) started`,
+  });
 });
 
 module.exports = { handleS3Trigger, handleECSTrigger };
