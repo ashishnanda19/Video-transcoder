@@ -8,7 +8,8 @@ const connectPassport = () => {
       {
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: "https://video-transcoder-server-vvep.onrender.com/api/v1/user/login",
+        // Must match the "Authorized redirect URI" in Google Cloud, e.g. http://localhost:8000/api/v1/user/login
+        callbackURL: process.env.GOOGLE_CALLBACK_URL || "https://video-transcoder-server-vvep.onrender.com/api/v1/user/login",
         scope:["profile","email"]
       },
       async function (accessToken, refreshToken, profile, done) {

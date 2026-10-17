@@ -85,6 +85,13 @@ cd video-transcoder-client && npm install && NEXT_PUBLIC_BACKEND_URL=http://loca
 Upload a small video (the UI caps at 30 MB). Expected: Mongo status `queued → starting → processing → completed`, four files in the final bucket, preview works.
 The bucket CORS already allows `http://localhost:3000`. The tunnel URL changes each time you restart it, so repeat the `terraform apply -var …` (and update `WEBHOOK_URL`). When you are done, set `lambda_api_endpoint` back or `terraform destroy`.
 
+## Signing in locally
+
+- **Default (`AUTH_DISABLED=true`)**: the "Login with Google" button sends you straight to `/upload` as a built-in dev user. No Google account or keys are involved. The server refuses this flag when `NODE_ENV=production`.
+- **Real Google login on localhost**: in Google Cloud Console create an OAuth client (type *Web application*), add the authorized redirect URI `http://localhost:8000/api/v1/user/login` and the origin `http://localhost:3000`, then in `server/.env` set
+  `AUTH_DISABLED=false`, `GOOGLE_CLIENT_ID=…`, `GOOGLE_CLIENT_SECRET=…`, `GOOGLE_CALLBACK_URL=http://localhost:8000/api/v1/user/login` and restart the server.
+  (Before this change the callback URL was hardcoded to the old Render host, so it could never work locally.)
+
 ## Cost and cleanup
 
 - Fargate e2e: a few cents. GPU e2e: ~$0.15-0.30. Idle: $0 (ASG at 0, no NAT gateway).

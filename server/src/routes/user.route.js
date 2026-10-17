@@ -4,9 +4,15 @@ const {
   getCurrentUser,
   logoutUser,
 } = require("../controllers/user.controller.js");
-const { isAuthenticated } = require("../middlewares/auth.middleware");
+const { isAuthenticated, authDisabled } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
+
+// Local development (AUTH_DISABLED=true): there is no Google strategy, so both entry points just land the
+// automatically signed-in dev user on the app instead of erroring with "Unknown authentication strategy".
+if (authDisabled()) {
+  router.get(["/google-login", "/login"], (req, res) => res.redirect(`${process.env.FRONTEND_URL}/upload`));
+}
 
 router.get(
   "/google-login",
