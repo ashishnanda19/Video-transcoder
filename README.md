@@ -37,10 +37,9 @@ The original diagram (without the CUDA stage) is still available at [assets/vide
 ## NVIDIA CUDA Acceleration
 
 - **Decode once, encode four in parallel**: the source is decoded a single time and 1080p, 720p, 480p and 360p are produced at the same moment.
-- **GPU pipeline**: NVDEC (decode) → CUDA scaling (`scale_cuda`) → NVENC (`h264_nvenc`), so frames stay in GPU memory.
-- **CPU fallback**: if a file cannot be handled on the GPU, or `TRANSCODE_MODE=cpu`, the job runs on CPU (libx264, `veryfast`, CRF 19). The CPU path is kept and is what runs today.
-- **Scale to zero**: GPU workers run on ECS (EC2, `g4dn`) and scale from zero when a job arrives and back to zero when idle.
-- The site reads the current mode from `/api/v1/video/config` and describes it honestly. The GPU path needs an AWS G/VT vCPU quota.
+- **GPU pipeline**: NVDEC (decode) → CUDA scaling → NVENC (encode), so frames stay in GPU memory.
+- **CPU fallback**: if a file cannot be handled on the GPU, the job runs on CPU.
+- **Scale to zero**: GPU workers run on ECS (EC2) and scale from zero when a job arrives and back to zero when idle.
 
 See [docs/gpu-migration.md](docs/gpu-migration.md) and [docs/performance.md](docs/performance.md).
 
