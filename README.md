@@ -1,109 +1,68 @@
-# Video Transcoding System
+# VidFlow
 
-This project implements a distributed video transcoding system with a leaky bucket rate-limiting mechanism using Node.js, AWS services, Redis, and ffmpeg, aimed at automatically generating multiple resolutions of uploaded videos. It enhances accessibility and optimizes viewing experiences by providing users with options to preview and download videos in various resolutions.
+Upload a video, get 1080p, 720p, 480p and 360p versions back in about a minute, with live progress, in-browser preview and one-click downloads.
 
+**Live:** https://vidflow-transcoder.vercel.app (sign in with Google)
 
+## Why it is fast: built on NVIDIA CUDA
 
-## Project Demo
+- **Decode once, encode four in parallel.** The source is decoded a single time and all four resolutions are produced at the same moment.
+- **Frames stay on the GPU.** The GPU path is NVDEC (decode) → CUDA scaling → NVENC (encode, `h264_nvenc`), with no copies back to system memory.
+- **Safe CPU fallback.** If a file cannot be handled on the GPU, the job transparently runs on CPU (libx264, tuned `veryfast`/CRF 19, about 2× faster than the defaults).
+- **Elastic.** GPU workers (ECS on EC2, `g4dn`) scale from zero when a job arrives and back to zero when idle.
 
-[![Watch the video](https://img.youtube.com/vi/i0EtH3EJCYY/0.jpg)](https://youtu.be/MarP77Ef6yE)
-
-
-
-## Table of Contents
-- [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
-- [Setup Instructions](#setup-instructions)
-- [How It Works](#how-it-works)
-- [Environment Variables](#environment-variables)
-- [Endpoints](#endpoints)
-- [Improvements](#improvements)
-
-
+Which path runs is controlled by `TRANSCODE_MODE` (`gpu` | `cpu`). The site reads the current mode from `/api/v1/video/config` and words its claims accordingly. The GPU path needs an AWS G/VT vCPU quota; until that is granted the deployment runs the CPU path. Details and benchmarks: [docs/gpu-migration.md](docs/gpu-migration.md), [docs/performance.md](docs/performance.md).
 
 ## Architecture
 
-![Video Transcoder Service System Design](./assets/video-transcoder-system-design.png)
+```mermaid
+flowchart LR
+  U[Browser] -->|static UI| V[Vercel]
+  U -->|/api rewrite| G[API Gateway]
+  G --> A[Express API on ECS Fargate]
+  A --> M[(MongoDB Atlas)]
+  A --> R[(Upstash Redis)]
+  U -->|signed PUT| S3T[(S3 temp bucket)]
+  S3T -->|event| L[Lambda]
+  L -->|signed trigger| A
+  A -->|RunTask| E[ECS transcoder: GPU or CPU]
+  E -->|read source| S3T
+  E -->|4 renditions| S3F[(S3 final bucket)]
+  E -->|signed webhook| A
+  U -->|signed GET| S3F
+```
 
+Everything in AWS is defined in Terraform ([infra/](infra)).
 
+## Repository layout
 
-## Technologies Used
+| Path | What it is |
+|---|---|
+| `video-transcoder-client/` | Next.js 14 static UI (Tailwind, framer-motion) deployed on Vercel |
+| `server/` | Express API: Google OAuth, owner-scoped video routes, limits, retention, job webhooks |
+| `ecs-task/` | The transcoder container (ffmpeg; GPU and CPU images) |
+| `upload-trigger-api/` | Lambda that turns an S3 upload event into a job |
+| `infra/` | Terraform for the whole AWS stack (`infra/bootstrap/` is the one-time admin step) |
+| `scripts/` | Deploy, secrets, verification and smoke-test scripts |
+| `docs/` | [go-live](docs/go-live.md) · [vercel](docs/vercel.md) · [local-testing](docs/local-testing.md) · [gpu-migration](docs/gpu-migration.md) · [performance](docs/performance.md) |
 
-- **AWS Services**: S3, Lambda, EventBridge, ECS
-- **Frontend**: Next.js
-- **Backend**: Node.js (with Express.js)
-- **Database**: MongoDB, Redis
-- **Docker**
-- **Serverless Framework**
+## Security model
 
+- Google sign-in (Passport, server-side sessions, helmet CSP). `ALLOW_ANYONE=true` lets any Google account in; otherwise an email allowlist applies and fails closed.
+- Videos are private to their owner; uploads and downloads use short-lived signed S3 URLs; per-job HMAC tokens secure the worker webhooks; the S3 trigger needs a shared secret.
+- Per-user and global daily upload limits, a size cap, automatic retention cleanup, and delete-anytime.
+- No credentials in the repo: AWS access uses IAM roles; secrets live in SSM Parameter Store.
 
+## Run it locally
 
-## Project Structure
+```bash
+cd server && npm install && npm run dev            # API on :8000 (AUTH_DISABLED=true skips Google login locally)
+cd video-transcoder-client && npm install && npm run dev   # UI on :3000
+```
 
-The project is organized into several components:
+Testing against real AWS from your laptop: [docs/local-testing.md](docs/local-testing.md). Deploying: [docs/go-live.md](docs/go-live.md) and [docs/vercel.md](docs/vercel.md).
 
-- **ecs-task**: Manages the transcoding process by spinning up Docker containers on ECS.
-- **upload-trigger-api**: AWS Lambda function triggered by S3 events, initiates video transcoding tasks.
-- **video-transcoder-client**: Next.js frontend for uploading videos, previewing transcoded videos, and downloading transcoded files.
-- **video-transcoder-server**: Main server implemented as a Lambda function using the Serverless Framework, handles video transcoding job queue management, rate limiting, and webhook calls.
-
-
-
-## GPU transcoding
-
-Transcoding can run on NVIDIA GPUs (NVDEC → CUDA scale → NVENC) on ECS-on-EC2 with an Auto Scaling Group that scales to **zero** when idle. It is switched with `TRANSCODE_MODE=gpu|cpu` on the server; the original Fargate/CPU path is kept. See [docs/gpu-migration.md](docs/gpu-migration.md) for deploy/teardown, cost, benchmarking, and the end-to-end test checklist.
-
-## Going live
-
-The app runs on AWS behind one https address (Google sign-in with an email allowlist, per-user ownership, authenticated webhooks), all defined in Terraform. See [docs/go-live.md](docs/go-live.md) for the 20-minute setup (MongoDB Atlas, Upstash Redis, Google OAuth) and operations, and [docs/local-testing.md](docs/local-testing.md) for running it on your machine.
-
-## Features
-
-- Automatically transcodes uploaded videos into multiple resolutions (360p, 480p, 720p, 1080p).
-- Rate limiting with a configurable concurrency cap (`MAX_CONCURRENT_JOBS`; 5 on CPU, derived from GPU capacity on GPU).
-- Integration with MongoDB for storing video metadata and status.
-- Utilizes signed URLs for secure uploads and downloads from S3.
-- Leverages AWS EventBridge for triggering transcoding tasks upon video upload events.
-
-
-
-## Key Features
-- **AWS Integration**: Utilizes AWS services like S3 for storage, Lambda for serverless computing, EventBridge for event-driven architecture, ECS for container orchestration, and MongoDB for database management.
-- **Dockerized Video Transcoding**: Leverages Docker containers for efficient and scalable video transcoding tasks.
-- **Event-Driven Architecture**: Initiates video transcoding tasks automatically upon video upload using S3 events and triggers further processing using EventBridge and Lambda functions.
-- **Rate Limiting**: Implements rate limiting using a leaky bucket strategy to ensure efficient resource utilization and prevent overload.
-- **Queue Management with Redis**: Utilizes Redis for queuing video transcoding jobs, ensuring efficient task management and scalability.
-- **Webhook Notifications**: Sends webhook notifications upon completion or failure of video transcoding tasks, facilitating real-time updates.
-- **Next.js Frontend**: Provides a user-friendly frontend interface for seamless video upload, preview, and download functionalities.
-
-
-
-## Getting Started
-
-To get started with the project, follow these steps:
-
-1. Clone the repository: `git clone <repository-url>`
-2. Install dependencies for each component (frontend, backend, ECS task).
-3. Configure environment variables for AWS services, MongoDB, and other settings.
-4. Deploy the backend components (Lambda functions, ECS task) using the provided scripts or Serverless Framework.
-5. Launch the frontend application and start uploading and transcoding videos.
-
-## How to Run
-1. **Setup AWS Services**: Configure AWS S3 buckets, Lambda functions, ECS clusters, and EventBridge rules as per the provided configuration.
-2. **Deploy Backend**: Deploy the serverless backend using the Serverless Framework.
-3. **Build and Deploy Frontend**: Build the Next.js frontend and deploy it to a suitable hosting platform.
-4. **Configure Environment Variables**: Set up environment variables for AWS credentials, S3 bucket names, webhook URLs, etc.
-5. **Run the System**: Start the system and verify functionality by uploading videos, monitoring transcoding tasks, and accessing transcoded files.
-
-
-
-## Usage
-
-- Upload videos through the frontend interface.
-- Preview transcoded videos in various resolutions.
-- Download transcoded files individually or as a zip archive.
-
----
-
-**If you find this project useful, please consider giving it a ⭐ on GitHub!**
-
+```bash
+cd server && npm test                    # API tests
+node scripts/check-live.js               # smoke-test the deployed site
+```
