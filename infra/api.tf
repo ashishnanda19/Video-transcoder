@@ -14,7 +14,10 @@ locals {
   # reads them at start-up. Terraform only knows their names.
   api_secret_names = ["MONGO_URI", "REDIS_URL", "SESSION_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "WEBHOOK_SECRET"]
   ssm_arn_prefix   = "arn:aws:ssm:${var.region}:${local.account_id}:parameter${local.ssm_prefix}"
-  public_url       = aws_apigatewayv2_api.api.api_endpoint # https://<id>.execute-api.<region>.amazonaws.com
+  # Direct address of the API (server-to-server: the upload Lambda and the transcoding containers call this one).
+  api_url = aws_apigatewayv2_api.api.api_endpoint # https://<id>.execute-api.<region>.amazonaws.com
+  # What people type in their browser: the API address itself, or e.g. the Vercel site that proxies /api to it.
+  public_url = var.public_site_url != "" ? trimsuffix(var.public_site_url, "/") : local.api_url
 }
 
 resource "aws_ecr_repository" "api" {
@@ -179,6 +182,8 @@ resource "aws_ecs_task_definition" "api" {
         { name = "PORT", value = "8000" },
         { name = "AWS_REGION", value = var.region },
         { name = "PUBLIC_URL", value = local.public_url },
+        # containers call the API directly (not through the Vercel proxy)
+        { name = "WEBHOOK_URL", value = "${local.api_url}/api/v1/video/ecs-trigger" },
         { name = "TEMP_S3_BUCKET_NAME", value = aws_s3_bucket.temp.bucket },
         { name = "FINAL_S3_BUCKET_NAME", value = aws_s3_bucket.final.bucket },
         { name = "TRANSCODE_MODE", value = var.transcode_mode },
@@ -195,6 +200,9 @@ resource "aws_ecs_task_definition" "api" {
         # who may sign in, and per-user limits
         { name = "ALLOWED_EMAILS", value = join(",", var.allowed_emails) },
         { name = "ALLOWED_EMAIL_DOMAINS", value = join(",", var.allowed_email_domains) },
+        { name = "ALLOW_ANYONE", value = tostring(var.allow_anyone) },
+        { name = "GLOBAL_DAILY_UPLOADS", value = tostring(var.global_daily_uploads) },
+        { name = "RETENTION_DAYS", value = tostring(var.retention_days) },
         { name = "USER_MAX_ACTIVE_JOBS", value = tostring(var.user_max_active_jobs) },
         { name = "USER_DAILY_UPLOADS", value = tostring(var.user_daily_uploads) },
       ],

@@ -200,7 +200,11 @@ export default function Page() {
       <footer className="border-t">
         <div className="container flex flex-col items-center justify-between gap-4 py-8 text-sm text-muted-foreground sm:flex-row">
           <Logo />
-          <p>© {new Date().getFullYear()} VidFlow. Built with Next.js, AWS and FFmpeg.</p>
+          <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-6">
+            <Link href="/privacy" className="transition hover:text-foreground">Privacy</Link>
+            <Link href="/terms" className="transition hover:text-foreground">Terms</Link>
+            <p>© {new Date().getFullYear()} VidFlow. Built with Next.js, AWS and FFmpeg.</p>
+          </div>
         </div>
       </footer>
     </div>

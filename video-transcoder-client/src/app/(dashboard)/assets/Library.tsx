@@ -149,7 +149,7 @@ export default function Library() {
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <AnimatePresence mode="popLayout">
           {shown.map((v, i) => (
-            <VideoCard key={v._id} video={v} index={i} />
+            <VideoCard key={v._id} video={v} index={i} onDeleted={(id) => setVideos((cur) => (cur ? cur.filter((x) => x._id !== id) : cur))} />
           ))}
         </AnimatePresence>
       </div>

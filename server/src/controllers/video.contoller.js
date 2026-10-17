@@ -5,13 +5,15 @@ const { ApiResponse } = require("../utils/ApiResponse.js");
 const { asyncHandler } = require("../utils/asyncHandler.js");
 const { VIDEO_PROCESS_STATES } = require("../constants.js");
 const { loadConfig } = require("../config.js");
-const { putObjectURL, getObjectURL } = require("../utils/s3SignedUrl.js");
+const { putObjectURL, getObjectURL, deleteObjectFile, deleteFinalPrefix } = require("../utils/s3SignedUrl.js");
+const { isDeletable, outputPrefixOf } = require("../utils/videoLifecycle.js");
 const {
   validateUploadRequest,
   buildUploadKey,
   buildOutputPrefix,
   titleFromFileName,
   sanitizeFileName,
+  MAX_UPLOAD_BYTES,
 } = require("../utils/uploadKey.js");
 
 const config = loadConfig();
@@ -40,7 +42,7 @@ const createUpload = asyncHandler(async (req, res) => {
   const { fileName, contentType } = req.body;
   const size = Number(req.body.size);
 
-  const [active, today] = await Promise.all([
+  const [active, today, serviceToday] = await Promise.all([
     Video.countDocuments({
       owner,
       $or: [
@@ -49,7 +51,12 @@ const createUpload = asyncHandler(async (req, res) => {
       ],
     }),
     Video.countDocuments({ owner, createdAt: { $gt: new Date(Date.now() - 24 * 3600 * 1000) } }),
+    Video.countDocuments({ createdAt: { $gt: new Date(Date.now() - 24 * 3600 * 1000) } }),
   ]);
+  if (serviceToday >= config.limits.uploadsPerDayGlobal) {
+    // The whole service has a daily budget (it runs on prepaid cloud credits). Say so plainly.
+    throw new ApiError(429, "VidFlow has reached its daily upload capacity. Please try again tomorrow.");
+  }
   if (active >= config.limits.maxActiveJobsPerUser) {
     throw new ApiError(429, `You already have ${active} videos in progress. Wait for one to finish, then try again.`);
   }
@@ -125,11 +132,41 @@ const getRenditionUrl = asyncHandler(async (req, res) => {
   const file = video.videoResolutions && video.videoResolutions[rung];
   if (video.progress !== VIDEO_PROCESS_STATES.COMPLETED || !file) throw new ApiError(404, "That rendition is not available yet");
 
-  const prefix = video.outputPrefix || `videos/${video.fileName}`; // records from before unique prefixes
+  const prefix = outputPrefixOf(video); // records from before unique prefixes fall back to the title
   const url = await getObjectURL(`${prefix}/${file}`, {
     downloadName: req.query.download ? `${video.fileName}-${rung}.mp4` : undefined,
   });
   return res.status(200).json(new ApiResponse(200, url, "Signed URL generated successfully"));
 });
 
-module.exports = { createUpload, getAllVideos, getVideoById, getVideoByFileName, getVideoStatus, getRenditionUrl };
+// Removes a video completely: its renditions, any leftover source upload, and the record. Owner only.
+async function removeVideoAssets(video) {
+  const removed = await deleteFinalPrefix(outputPrefixOf(video)).catch((e) => {
+    if (/suspicious prefix/.test(e.message)) return 0; // legacy/odd record: nothing safe to delete
+    throw e;
+  });
+  if (video.objectKey) await deleteObjectFile(video.objectKey); // already gone for finished jobs; harmless
+  return removed;
+}
+
+const deleteVideo = asyncHandler(async (req, res) => {
+  const video = await ownedVideo(req, req.params.videoId);
+  if (!isDeletable(video.progress)) {
+    throw new ApiError(409, "This video is still being processed. You can delete it once it has finished.");
+  }
+  await removeVideoAssets(video);
+  await Video.deleteOne({ _id: video._id, owner: req.user._id });
+  return res.status(200).json(new ApiResponse(200, {}, "Video deleted"));
+});
+
+// Public, non-secret facts the UI shows (limits, retention) so the text never disagrees with the server.
+const getPublicConfig = (req, res) =>
+  res.status(200).json(
+    new ApiResponse(
+      200,
+      { maxUploadMb: Math.round(MAX_UPLOAD_BYTES / 1024 / 1024), retentionDays: config.retentionDays, dailyUploadsPerUser: config.limits.uploadsPerUserPerDay },
+      "ok"
+    )
+  );
+
+module.exports = { createUpload, getAllVideos, getVideoById, getVideoByFileName, getVideoStatus, getRenditionUrl, deleteVideo, removeVideoAssets, getPublicConfig };

@@ -34,12 +34,20 @@ const json = (body) => ({ method: "POST", headers: { "Content-Type": "applicatio
   const home = await get("/");
   const html = await home.text();
   ok(home.status === 200 && /VidFlow/.test(html), "landing page is served", `HTTP ${home.status}`);
-  ok(/no-cache/.test(home.headers.get("cache-control") || ""), "pages are revalidated, not stuck in caches", home.headers.get("cache-control") || "none");
+  // the API container says "no-cache"; Vercel's static hosting says "max-age=0, must-revalidate". Both mean "always revalidate".
+  ok(/no-cache|max-age=0|must-revalidate/.test(home.headers.get("cache-control") || ""), "pages are revalidated, not stuck in caches", home.headers.get("cache-control") || "none");
   const asset = (html.match(/\/_next\/static\/[^"']+\.js/) || [])[0];
   if (asset) {
     const a = await get(asset);
     ok(a.status === 200 && /immutable/.test(a.headers.get("cache-control") || ""), "hashed assets are cached for a year", a.headers.get("cache-control") || "none");
   }
+  for (const legal of ["/privacy/", "/terms/"]) {
+    const r = await get(legal);
+    ok(r.status === 200, `${legal} page is served (Google requires a privacy policy and terms)`, `HTTP ${r.status}`);
+  }
+  const cfg = await get("/api/v1/video/config");
+  const cfgBody = await cfg.json().catch(() => ({}));
+  ok(cfg.status === 200 && cfgBody.data && cfgBody.data.maxUploadMb > 0, "public config endpoint answers (and reveals no secrets)", cfg.status === 200 ? JSON.stringify(cfgBody.data) : `HTTP ${cfg.status}`);
   const miss = await get("/definitely-not-a-page", { headers: { Accept: "text/html" } });
   ok(miss.status === 404, "unknown pages return a real 404", `HTTP ${miss.status}`);
 

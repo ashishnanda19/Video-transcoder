@@ -7,6 +7,8 @@ const {
   getVideoById,
   getVideoStatus,
   getRenditionUrl,
+  deleteVideo,
+  getPublicConfig,
 } = require("../controllers/video.contoller.js");
 const { isAuthenticated, requireWebhookSecret } = require("../middlewares/auth.middleware.js");
 
@@ -16,11 +18,15 @@ const router = Router();
 router.post("/s3-trigger", requireWebhookSecret, handleS3Trigger);
 router.post("/ecs-trigger", handleECSTrigger);
 
+// public facts the UI displays (limits, retention); nothing secret
+router.get("/config", getPublicConfig);
+
 // signed-in users only, and always scoped to their own videos
 router.post("/uploads", isAuthenticated, createUpload);
 router.get("/get-all-videos", isAuthenticated, getAllVideos);
 router.get("/id/:videoId", isAuthenticated, getVideoById);
 router.get("/id/:videoId/rendition/:rung", isAuthenticated, getRenditionUrl);
+router.delete("/id/:videoId", isAuthenticated, deleteVideo);
 router.get("/v/:fileName", isAuthenticated, getVideoByFileName);
 router.get("/s/:videoId", isAuthenticated, getVideoStatus);
 

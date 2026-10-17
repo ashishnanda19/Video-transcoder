@@ -27,7 +27,7 @@ resource "aws_s3_bucket_cors_configuration" "this" {
   cors_rule {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "PUT", "POST", "DELETE", "HEAD"]
-    allowed_origins = concat([local.public_url], var.cors_allowed_origins)
+    allowed_origins = distinct(concat([local.public_url, local.api_url], var.cors_allowed_origins))
     expose_headers  = ["ETag"]
     max_age_seconds = 3000
   }
@@ -42,6 +42,24 @@ resource "aws_s3_bucket_lifecycle_configuration" "temp" {
     filter {}
     expiration {
       days = var.temp_upload_expiry_days
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
+}
+
+# Backstop for the server's own retention sweep: even if it never ran, nothing outlives retention_days + 3.
+resource "aws_s3_bucket_lifecycle_configuration" "final" {
+  count  = var.retention_days > 0 ? 1 : 0
+  bucket = aws_s3_bucket.final.id
+
+  rule {
+    id     = "expire-old-renditions"
+    status = "Enabled"
+    filter {}
+    expiration {
+      days = var.retention_days + 3
     }
     abort_incomplete_multipart_upload {
       days_after_initiation = 1

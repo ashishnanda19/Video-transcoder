@@ -71,7 +71,9 @@ function SignInForm() {
         {!loading && <GoogleG />} Continue with Google
       </Button>
       <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
-        We only read your name, email and profile picture. Access is limited to approved accounts.
+        We only read your name, email and profile picture. By continuing you agree to the{" "}
+        <Link href="/terms" className="underline underline-offset-2 hover:text-foreground">Terms</Link> and{" "}
+        <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>.
       </p>
     </motion.div>
   );

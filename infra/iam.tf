@@ -113,9 +113,14 @@ data "aws_iam_policy_document" "server" {
     resources = ["${aws_s3_bucket.temp.arn}/*"]
   }
   statement {
-    sid       = "FinalBucketRead"
-    actions   = ["s3:GetObject"]
+    sid       = "FinalBucketReadAndDelete"
+    actions   = ["s3:GetObject", "s3:DeleteObject"] # delete: a user removing their video, and the retention sweep
     resources = ["${aws_s3_bucket.final.arn}/*"]
+  }
+  statement {
+    sid       = "FinalBucketList"
+    actions   = ["s3:ListBucket"] # to find every rendition under a video's prefix
+    resources = [aws_s3_bucket.final.arn]
   }
 }
 

@@ -18,6 +18,8 @@ S3 upload event ► Lambda ► POST /api/v1/video/s3-trigger (shared secret from
 
 Because the UI and API share one origin, session cookies are first-party and there is no CORS to configure.
 
+To host the UI on **Vercel** and open the service to everyone, follow [vercel.md](vercel.md) after this guide.
+
 **Why not CloudFront / App Runner?** This AWS account is new and AWS blocks both until it is "verified" (CloudFront: *"Your account must be
 verified before you can add new CloudFront resources"*; App Runner: `SubscriptionRequiredException`). The same restriction is why the GPU quota is 0.
 The design works without them. If AWS later verifies the account, a CDN can be put in front without changing the app; see *AWS Support* below.

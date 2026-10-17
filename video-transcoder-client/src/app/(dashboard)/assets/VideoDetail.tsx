@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Download, FileQuestion, Loader2, Package, Play } from "lucide-react";
+import { ArrowLeft, Download, FileQuestion, Loader2, Package, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/use-toast";
+import { DeleteVideoDialog, canDelete } from "@/components/video/DeleteVideoDialog";
 import { PipelineTracker } from "@/components/video/PipelineTracker";
 import { StatusPill } from "@/components/video/StatusPill";
 import { DIMS, VideoPlayer } from "@/components/video/VideoPlayer";
@@ -71,6 +73,8 @@ function WaitingState({ loading, fileName }: { loading: boolean; fileName: strin
 }
 
 function Loaded({ video }: { video: Video }) {
+  const router = useRouter();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const done = video.progress === "completed";
   const { urls, loading: urlsLoading, error } = useRenditionUrls(video);
   const [rung, setRung] = useState<Rung | undefined>();
@@ -111,12 +115,20 @@ function Loaded({ video }: { video: Video }) {
           </div>
           <p className="mt-1.5 text-sm text-muted-foreground">Uploaded {timeAgo(video.createdAt)} · {formatDateTime(video.createdAt)}</p>
         </div>
-        {done && (
-          <Button variant="secondary" loading={zip !== null} onClick={downloadZip}>
-            {zip === null && <Package className="h-4 w-4" />}
-            {zip === null ? "Download all (ZIP)" : `Zipping ${Math.round(zip * 100)}%`}
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {done && (
+            <Button variant="secondary" loading={zip !== null} onClick={downloadZip}>
+              {zip === null && <Package className="h-4 w-4" />}
+              {zip === null ? "Download all (ZIP)" : `Zipping ${Math.round(zip * 100)}%`}
+            </Button>
+          )}
+          {canDelete(video) && (
+            <Button variant="ghost" onClick={() => setConfirmDelete(true)} className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          )}
+        </div>
+        <DeleteVideoDialog video={video} open={confirmDelete} onOpenChange={setConfirmDelete} onDeleted={() => router.push("/assets")} />
       </div>
 
       {done ? (

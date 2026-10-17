@@ -73,6 +73,11 @@ output "site_url" {
   description = "The public address of the app."
 }
 
+output "api_url" {
+  value       = local.api_url
+  description = "The API's own address (what vercel.json proxies /api to; also used by the Lambda and the containers)."
+}
+
 output "google_oauth_authorized_origin" {
   value       = local.public_url
   description = "Google Cloud Console > OAuth client > Authorized JavaScript origins"

@@ -11,10 +11,10 @@ import { toast } from "@/components/ui/use-toast";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { apiErrorMessage, createUpload, RUNGS } from "@/lib/api";
 import { formatBytes, formatDuration } from "@/lib/format";
+import { useConfig } from "@/hooks/useConfig";
 import { DIMS } from "@/components/video/VideoPlayer";
 import { cn } from "@/lib/utils";
 
-const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30 MB (the presigned upload link is short-lived)
 const ALLOWED = ["video/mp4", "video/webm", "video/ogg", "video/quicktime"];
 
 type Phase = "idle" | "preparing" | "uploading" | "done" | "error";
@@ -37,6 +37,8 @@ function putWithProgress(url: string, file: File, onProgress: (loaded: number, t
 
 export default function UploadPage() {
   const router = useRouter();
+  const config = useConfig();
+  const maxBytes = config.maxUploadMb * 1024 * 1024;
   const inputRef = useRef<HTMLInputElement>(null);
   const handle = useRef<{ xhr?: XMLHttpRequest }>({});
   const [file, setFile] = useState<File | null>(null);
@@ -61,12 +63,12 @@ export default function UploadPage() {
       toast({ title: "Unsupported format", description: "Please choose an MP4, WebM, OGG or MOV video.", variant: "destructive" });
       return;
     }
-    if (f.size > MAX_FILE_SIZE) {
-      toast({ title: "File too large", description: `That file is ${formatBytes(f.size)}. The limit is ${formatBytes(MAX_FILE_SIZE, 0)}.`, variant: "destructive" });
+    if (f.size > maxBytes) {
+      toast({ title: "File too large", description: `That file is ${formatBytes(f.size)}. The limit is ${formatBytes(maxBytes, 0)}.`, variant: "destructive" });
       return;
     }
     setFile(f); setPhase("idle"); setProgress(0); setError(null);
-  }, []);
+  }, [maxBytes]);
 
   const start = async () => {
     if (!file) return;
@@ -133,7 +135,7 @@ export default function UploadPage() {
                     <CloudUpload className="h-9 w-9" />
                   </div>
                   <h2 className="text-xl font-semibold tracking-tight">{dragging ? "Drop it here" : "Drag & drop your video"}</h2>
-                  <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">or click to browse. MP4, WebM, OGG or MOV, up to {formatBytes(MAX_FILE_SIZE, 0)}.</p>
+                  <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">or click to browse. MP4, WebM, OGG or MOV, up to {formatBytes(maxBytes, 0)}.</p>
                   <Button className="mt-7" size="lg" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>
                     <FileVideo className="h-4 w-4" /> Choose a file
                   </Button>
@@ -235,6 +237,11 @@ export default function UploadPage() {
               ))}
             </ul>
             <p className="mt-4 text-xs leading-relaxed text-muted-foreground">H.264 video with AAC audio, aspect ratio preserved. Encoded in parallel.</p>
+            {config.retentionDays > 0 && (
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Videos are deleted automatically after {config.retentionDays} days. You can delete them sooner from your library.
+              </p>
+            )}
           </Card>
           <Card className="flex gap-3 p-5">
             <Lock className="mt-0.5 h-4 w-4 shrink-0 text-success" />

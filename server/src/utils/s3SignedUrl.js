@@ -3,6 +3,8 @@ const {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
 } = require("@aws-sdk/client-s3");
 
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
@@ -47,4 +49,21 @@ async function deleteObjectFile(key) {
   }
 }
 
-module.exports = { putObjectURL, getObjectURL, deleteObjectFile };
+// Deletes everything under a key prefix in the FINAL bucket (all renditions of one video). Safe to call twice.
+async function deleteFinalPrefix(prefix) {
+  if (!prefix || !/^videos\/[^/]+$/.test(prefix)) throw new Error(`Refusing to delete suspicious prefix "${prefix}"`);
+  let deleted = 0;
+  let token;
+  do {
+    const page = await s3Client.send(new ListObjectsV2Command({ Bucket: finalBucket(), Prefix: `${prefix}/`, ContinuationToken: token }));
+    const keys = (page.Contents || []).map((o) => ({ Key: o.Key }));
+    if (keys.length) {
+      await s3Client.send(new DeleteObjectsCommand({ Bucket: finalBucket(), Delete: { Objects: keys, Quiet: true } }));
+      deleted += keys.length;
+    }
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+  return deleted;
+}
+
+module.exports = { putObjectURL, getObjectURL, deleteObjectFile, deleteFinalPrefix };

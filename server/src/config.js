@@ -40,7 +40,11 @@ function loadConfig(env = process.env) {
     limits: {
       maxActiveJobsPerUser: Number(env.USER_MAX_ACTIVE_JOBS || 3),
       uploadsPerUserPerDay: Number(env.USER_DAILY_UPLOADS || 20),
+      // A ceiling for the WHOLE service per rolling 24 h, so open sign-up can never spend more than a known amount.
+      uploadsPerDayGlobal: Number(env.GLOBAL_DAILY_UPLOADS || 100),
     },
+    // Videos (source and renditions) are deleted this many days after upload. 0 disables the sweep.
+    retentionDays: env.RETENTION_DAYS === undefined || env.RETENTION_DAYS === "" ? 30 : Number(env.RETENTION_DAYS),
   };
 }
 

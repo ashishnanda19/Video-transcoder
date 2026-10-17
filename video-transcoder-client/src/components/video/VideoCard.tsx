@@ -3,19 +3,21 @@
 import Link from "next/link";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Download, Play } from "lucide-react";
+import { Download, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/components/ui/use-toast";
 import { PIPELINE, RUNGS, type Video } from "@/lib/api";
 import { downloadAllAsZip } from "@/lib/download";
 import { timeAgo } from "@/lib/format";
+import { DeleteVideoDialog, canDelete } from "./DeleteVideoDialog";
 import { PlayerDialog } from "./PlayerDialog";
 import { StatusPill } from "./StatusPill";
 import { VideoThumb } from "./VideoThumb";
 
-export function VideoCard({ video, index = 0 }: { video: Video; index?: number }) {
+export function VideoCard({ video, index = 0, onDeleted }: { video: Video; index?: number; onDeleted?: (id: string) => void }) {
   const [playing, setPlaying] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [zip, setZip] = useState<number | null>(null);
   const done = video.progress === "completed";
   const failed = video.progress === "failed";
@@ -52,7 +54,18 @@ export function VideoCard({ video, index = 0 }: { video: Video; index?: number }
             </Link>
             <p className="mt-0.5 text-xs text-muted-foreground">{timeAgo(video.createdAt)}</p>
           </div>
-          <StatusPill status={video.progress} className="shrink-0" />
+          <div className="flex shrink-0 items-center gap-1.5">
+            <StatusPill status={video.progress} />
+            {canDelete(video) && (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                aria-label={`Delete ${video.fileName}`}
+                className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {done && (
@@ -87,6 +100,7 @@ export function VideoCard({ video, index = 0 }: { video: Video; index?: number }
       </div>
 
       {done && <PlayerDialog video={video} open={playing} onOpenChange={setPlaying} />}
+      <DeleteVideoDialog video={video} open={confirmDelete} onOpenChange={setConfirmDelete} onDeleted={() => onDeleted?.(video._id)} />
     </motion.article>
   );
 }

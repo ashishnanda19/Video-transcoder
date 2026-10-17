@@ -74,6 +74,22 @@ export async function createUpload(file: { name: string; type: string; size: num
   return data.data;
 }
 
+export async function deleteVideo(id: string) {
+  await api.delete(`/video/id/${encodeURIComponent(id)}`);
+}
+
+export interface PublicConfig {
+  maxUploadMb: number;
+  retentionDays: number;
+  dailyUploadsPerUser: number;
+}
+export const DEFAULT_CONFIG: PublicConfig = { maxUploadMb: 30, retentionDays: 30, dailyUploadsPerUser: 20 };
+
+export async function getPublicConfig() {
+  const { data } = await api.get<Envelope<PublicConfig>>("/video/config");
+  return data.data;
+}
+
 // Signed GET URL for one rendition (expires, so fetch it when needed rather than storing it).
 export async function getRenditionUrl(videoId: string, rung: Rung, opts: { download?: boolean } = {}) {
   const { data } = await api.get<Envelope<string>>(`/video/id/${encodeURIComponent(videoId)}/rendition/${rung}`, {

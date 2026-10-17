@@ -198,6 +198,30 @@ variable "user_max_active_jobs" {
   description = "Videos one user may have in progress at once."
 }
 
+variable "public_site_url" {
+  type        = string
+  default     = ""
+  description = "The address people use in their browser when it differs from the API Gateway address, e.g. \"https://vidflow.vercel.app\" when the UI is hosted on Vercel and proxies /api to this API. Used for the Google redirect URI, cookies and S3 CORS. Empty = the API Gateway address."
+}
+
+variable "allow_anyone" {
+  type        = bool
+  default     = false
+  description = "true = any verified Google account may sign in (the per-user and global limits still apply). false = only allowed_emails / allowed_email_domains."
+}
+
+variable "global_daily_uploads" {
+  type        = number
+  default     = 100
+  description = "Uploads the WHOLE service accepts per rolling 24 hours: a hard ceiling on what open sign-up can spend. Rough worst case is ~$0.015 per upload (Fargate encode + downloading every rendition), so 100/day is about $1.50/day."
+}
+
+variable "retention_days" {
+  type        = number
+  default     = 30
+  description = "Videos are deleted this many days after upload (0 = keep forever)."
+}
+
 variable "user_daily_uploads" {
   type        = number
   default     = 20

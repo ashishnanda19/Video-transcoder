@@ -87,6 +87,11 @@ async function api(p, opts = {}) {
     ok(again.ok, "a duplicate S3 event is acknowledged (and ignored)", `HTTP ${again.status}`);
   }
 
+  if (LAMBDA_SECRET) {
+    const early = await api(`/video/id/${videoId}`, { method: "DELETE" });
+    ok(early.res.status === 409, "deleting a video that is still being processed is refused", `HTTP ${early.res.status}`);
+  }
+
   console.log("\nPipeline");
   let last = "";
   const deadline = Date.now() + TIMEOUT_MIN * 60000;
@@ -122,6 +127,21 @@ async function api(p, opts = {}) {
   ok(other.res.status === 404, "someone else's / unknown video id looks like 'not found'", `HTTP ${other.res.status}`);
   const bogusRung = await api(`/video/id/${videoId}/rendition/4k`);
   ok(bogusRung.res.status === 400, "unknown rendition names are rejected", `HTTP ${bogusRung.res.status}`);
+
+  const cfg = await api("/video/config");
+  ok(cfg.res.ok && cfg.body.data && cfg.body.data.maxUploadMb > 0, "public config is available", JSON.stringify(cfg.body.data));
+
+  console.log("\nDeleting");
+  const signed = (await api(`/video/id/${videoId}/rendition/360p`)).body.data;
+  ok((await fetch(signed, { headers: { Range: "bytes=0-0" } })).ok, "the rendition is downloadable before deletion");
+  const del = await api(`/video/id/${videoId}`, { method: "DELETE" });
+  ok(del.res.status === 200, "owner can delete the finished video", `HTTP ${del.res.status}`);
+  const gone = await api(`/video/id/${videoId}`);
+  ok(gone.res.status === 404, "the record is gone", `HTTP ${gone.res.status}`);
+  const after = await fetch(signed, { headers: { Range: "bytes=0-0" } });
+  ok(after.status === 404, "the files are gone from S3 (an old signed link now 404s)", `HTTP ${after.status}`);
+  const again = await api(`/video/id/${videoId}`, { method: "DELETE" });
+  ok(again.res.status === 404, "deleting twice is harmless (404)", `HTTP ${again.res.status}`);
 
   log(failed ? `${failed} CHECK(S) FAILED` : "all checks passed");
   process.exit(failed ? 1 : 0);

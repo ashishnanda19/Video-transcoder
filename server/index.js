@@ -151,6 +151,7 @@ async function main() {
 
   // Start the queue poller only once the app is up (it connects to Redis on import).
   require("./src/jobs/queueProcessor.js");
+  require("./src/jobs/retention.js").startRetentionSweep();
 
   const port = process.env.PORT || 8000;
   const server = app.listen(port, () => console.log(`Server is running on port ${port}`));

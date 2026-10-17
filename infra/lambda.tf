@@ -91,7 +91,7 @@ resource "aws_lambda_function" "upload_trigger" {
 
   environment {
     variables = {
-      API_ENDPOINT = var.lambda_api_endpoint != "" ? var.lambda_api_endpoint : "${local.public_url}/api/v1/video/s3-trigger"
+      API_ENDPOINT = var.lambda_api_endpoint != "" ? var.lambda_api_endpoint : "${local.api_url}/api/v1/video/s3-trigger"
       # The shared secret itself stays in SSM; the function fetches it when it starts.
       WEBHOOK_SECRET_PARAM = "${local.ssm_prefix}/WEBHOOK_SECRET"
     }
