@@ -2,16 +2,15 @@
 
 Upload a video, get 1080p, 720p, 480p and 360p versions back in about a minute, with live progress, in-browser preview and one-click downloads.
 
-**Live:** https://vidflow-transcoder.vercel.app (sign in with Google)
+**Live:** https://vidflow-transcoder.vercel.app
 
 ## Why it is fast: built on NVIDIA CUDA
 
 - **Decode once, encode four in parallel.** The source is decoded a single time and all four resolutions are produced at the same moment.
-- **Frames stay on the GPU.** The GPU path is NVDEC (decode) → CUDA scaling → NVENC (encode, `h264_nvenc`), with no copies back to system memory.
-- **Safe CPU fallback.** If a file cannot be handled on the GPU, the job transparently runs on CPU (libx264, tuned `veryfast`/CRF 19, about 2× faster than the defaults).
-- **Elastic.** GPU workers (ECS on EC2, `g4dn`) scale from zero when a job arrives and back to zero when idle.
+- **Frames stay on the GPU.** The GPU path is NVDEC (decode) → CUDA scaling → NVENC (encode), with no copies back to system memory.
+- **Safe CPU fallback.** If a file cannot be handled on the GPU, the job transparently runs on CPU.
+- **Elastic.** GPU workers (ECS on EC2) scale from zero when a job arrives and back to zero when idle.
 
-Which path runs is controlled by `TRANSCODE_MODE` (`gpu` | `cpu`). The site reads the current mode from `/api/v1/video/config` and words its claims accordingly. The GPU path needs an AWS G/VT vCPU quota; until that is granted the deployment runs the CPU path. Details and benchmarks: [docs/gpu-migration.md](docs/gpu-migration.md), [docs/performance.md](docs/performance.md).
 
 ## Architecture
 
