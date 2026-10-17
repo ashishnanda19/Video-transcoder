@@ -3,10 +3,10 @@ import { createSlice } from "@reduxjs/toolkit";
 // <any> will be replaceed by user type
 
 export interface UserType {
-  displayName: String;
-  googleId: String;
-  email: String;
-  avatar: String;
+  displayName: string;
+  googleId: string;
+  email: string;
+  avatar: string;
 }
 
 interface UserReducerInitialState {
