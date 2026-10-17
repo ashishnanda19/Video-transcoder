@@ -203,6 +203,7 @@ resource "aws_ecs_task_definition" "api" {
         { name = "ALLOW_ANYONE", value = tostring(var.allow_anyone) },
         { name = "GLOBAL_DAILY_UPLOADS", value = tostring(var.global_daily_uploads) },
         { name = "RETENTION_DAYS", value = tostring(var.retention_days) },
+        { name = "MAX_CONCURRENT_JOBS", value = tostring(var.max_concurrent_jobs) },
         { name = "USER_MAX_ACTIVE_JOBS", value = tostring(var.user_max_active_jobs) },
         { name = "USER_DAILY_UPLOADS", value = tostring(var.user_daily_uploads) },
       ],

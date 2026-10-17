@@ -222,6 +222,12 @@ variable "retention_days" {
   description = "Videos are deleted this many days after upload (0 = keep forever)."
 }
 
+variable "max_concurrent_jobs" {
+  type        = number
+  default     = 1
+  description = "Transcoding jobs that may run at once. Each CPU job is a 4 vCPU Fargate task and this account's Fargate quota is 8 vCPU (the API uses 0.25), so 1 is all it can run today; the rest wait in the queue. After raising the quota (see docs/performance.md): quota / 4 minus one is a safe value."
+}
+
 variable "user_daily_uploads" {
   type        = number
   default     = 20

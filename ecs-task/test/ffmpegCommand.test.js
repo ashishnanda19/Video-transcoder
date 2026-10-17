@@ -37,17 +37,26 @@ test("gpu/separate: one process per rung, each decoding on GPU", () => {
   }
 });
 
-test("cpu/separate (legacy default): libx264 + aac, no CUDA flags", () => {
+test("cpu defaults: one process (decode once), fast libx264 preset, aac, no CUDA flags", () => {
   const j = job({ TRANSCODE_MODE: "cpu" });
-  assert.equal(j.strategy, "separate");
+  assert.equal(j.strategy, "split");
+  assert.equal(j.commands.length, 1);
+  const s = flat(j.commands[0]);
+  assert.match(s, /split=4/);
+  assert.match(s, /\[s0\]scale=1920:1080\[v0\]/);
+  assert.match(s, /-c:v libx264 -preset veryfast -crf 19 -pix_fmt yuv420p/);
+  assert.doesNotMatch(s, /cuda|nvenc|npp/);
+});
+
+test("cpu/separate (legacy layout) and the old medium/CRF 23 quality are one env var away", () => {
+  const j = job({ TRANSCODE_MODE: "cpu", TRANSCODE_STRATEGY: "separate", CPU_PRESET: "medium", CPU_CRF: "23" });
   assert.equal(j.commands.length, 4);
   const s = flat(j.commands[0]);
   assert.match(s, /-vf scale=1920:1080/);
   assert.match(s, /-c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p/);
-  assert.doesNotMatch(s, /cuda|nvenc|npp/);
 });
 
-test("cpu/split is supported (decode once on CPU)", () => {
+test("cpu/split filtergraph scales every rung from one decode", () => {
   const s = flat(job({ TRANSCODE_MODE: "cpu", TRANSCODE_STRATEGY: "split" }).commands[0]);
   assert.match(s, /split=4/);
   assert.match(s, /\[s1\]scale=1280:720\[v1\]/);

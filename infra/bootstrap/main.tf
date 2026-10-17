@@ -122,7 +122,7 @@ data "aws_iam_policy_document" "iam" {
     condition {
       test     = "StringEquals"
       variable = "iam:AWSServiceName"
-      values   = ["ecs.amazonaws.com", "autoscaling.amazonaws.com", "ops.apigateway.amazonaws.com"]
+      values   = ["ecs.amazonaws.com", "autoscaling.amazonaws.com", "ops.apigateway.amazonaws.com", "servicequotas.amazonaws.com"]
     }
   }
 }

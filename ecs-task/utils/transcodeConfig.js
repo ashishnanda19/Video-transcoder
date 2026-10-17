@@ -42,8 +42,9 @@ function readConfig(env = process.env) {
   const mode = oneOf(env.TRANSCODE_MODE, ["gpu", "cpu"], "cpu", "TRANSCODE_MODE");
   return {
     mode,
-    // GPU decodes once and encodes many (split); the legacy CPU path ran 4 processes.
-    strategy: oneOf(env.TRANSCODE_STRATEGY, ["split", "separate"], mode === "gpu" ? "split" : "separate", "TRANSCODE_STRATEGY"),
+    // One ffmpeg process decodes once and encodes every rung ("split") on both paths; it measured ~10% faster than the
+    // legacy one-process-per-rung layout on CPU. TRANSCODE_STRATEGY=separate restores the old behaviour.
+    strategy: oneOf(env.TRANSCODE_STRATEGY, ["split", "separate"], "split", "TRANSCODE_STRATEGY"),
     fallbackToCpu: bool(env.GPU_FALLBACK_TO_CPU, true),
     ladder: parseLadder(env.LADDER_KBPS),
     audio: {
@@ -60,8 +61,10 @@ function readConfig(env = process.env) {
       hevcBitrateFactor: Number(env.HEVC_BITRATE_FACTOR || 0.7),
     },
     cpu: {
-      preset: env.CPU_PRESET || "medium", // libx264 defaults, i.e. what the old path implicitly used
-      crf: Number(env.CPU_CRF || 23),
+      // Measured on a real 1080p60 clip (see docs/performance.md): veryfast+CRF19 encodes ~2x faster than the old
+      // medium+CRF23 at the same visual quality (VMAF 92.0 vs 92.3 at 1080p), for ~28% larger files.
+      preset: env.CPU_PRESET || "veryfast",
+      crf: Number(env.CPU_CRF || 19),
       capBitrate: bool(env.CPU_USE_LADDER, false), // apply maxrate/bufsize from the ladder for apples-to-apples tests
     },
     logLevel: env.FFMPEG_LOGLEVEL || "warning",
