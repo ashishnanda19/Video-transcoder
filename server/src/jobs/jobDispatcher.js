@@ -24,7 +24,10 @@ const dispatcher = createDispatcher({
   // Only advance jobs that haven't already been moved on by the container's own 'processing' ping.
   markStarting: (job) =>
     Video.findOneAndUpdate(
-      { objectKey: job.objectKey, progress: { $in: [VIDEO_PROCESS_STATES.PENDING, VIDEO_PROCESS_STATES.QUEUED] } },
+      {
+        ...(job.videoId ? { _id: job.videoId } : { objectKey: job.objectKey }), // jobs queued before ids existed
+        progress: { $in: [VIDEO_PROCESS_STATES.PENDING, VIDEO_PROCESS_STATES.QUEUED] },
+      },
       { $set: { progress: VIDEO_PROCESS_STATES.STARTING } }
     ),
 });

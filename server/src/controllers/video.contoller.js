@@ -5,9 +5,14 @@ const { ApiResponse } = require("../utils/ApiResponse.js");
 const { asyncHandler } = require("../utils/asyncHandler.js");
 
 const getAllVideos = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
-  const pageNo = parseInt(page);
-  const limitNo = parseInt(limit);
+  const { page = 1, limit = 10, query, sortBy, sortType, userId, status } = req.query;
+  const pageNo = Math.max(1, parseInt(page) || 1);
+  const limitNo = Math.min(100, Math.max(1, parseInt(limit) || 10));
+  // Default stays "completed only" (existing behaviour). The library UI passes status=all to also see queued /
+  // starting / processing / failed videos, or a single status to filter.
+  const allowedStatuses = ["pending", "queued", "starting", "processing", "completed", "failed"];
+  const statusFilter = status === "all" ? null : allowedStatuses.includes(status) ? status : "completed";
+  const escapeRegex = (text) => String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
   const aggregationPipeline = [];
 
@@ -15,16 +20,12 @@ const getAllVideos = asyncHandler(async (req, res) => {
   if (userId) {
     aggregationPipeline.push({
       $match: {
-        owner: mongoose.Types.ObjectId(userId),
-        progress: "completed", // Considering only completed videos
+        owner: new mongoose.Types.ObjectId(userId),
+        ...(statusFilter ? { progress: statusFilter } : {}),
       },
     });
-  } else {
-    aggregationPipeline.push({
-      $match: {
-        progress: "completed", // Considering only completed videos
-      },
-    });
+  } else if (statusFilter) {
+    aggregationPipeline.push({ $match: { progress: statusFilter } });
   }
 
   // Search stage if query is provided
@@ -32,8 +33,8 @@ const getAllVideos = asyncHandler(async (req, res) => {
     aggregationPipeline.push({
       $match: {
         $or: [
-          { fileName: { $regex: query, $options: "i" } }, // Case-insensitive search for fileName
-          { thumbnailUrl: { $regex: query, $options: "i" } }, // Case-insensitive search for thumbnailUrl
+          { fileName: { $regex: escapeRegex(query), $options: "i" } }, // Case-insensitive search for fileName
+          { thumbnailUrl: { $regex: escapeRegex(query), $options: "i" } }, // Case-insensitive search for thumbnailUrl
         ],
       },
     });
@@ -84,7 +85,25 @@ const getVideoByFileName = asyncHandler(async (req, res) => {
     throw new ApiError(400, "video fileName is required!");
   }
 
-  const video = await Video.findOne({ fileName });
+  // Several uploads can share a file name; show the most recent one.
+  const video = await Video.findOne({ fileName }).sort({ createdAt: -1 });
+
+  if (!video) {
+    throw new ApiError(404, "Video not found!");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, video, "video fetched successfully"));
+});
+
+const getVideoById = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+  if (!mongoose.isValidObjectId(videoId)) {
+    throw new ApiError(400, "invalid videoId");
+  }
+
+  const video = await Video.findById(videoId);
 
   if (!video) {
     throw new ApiError(404, "Video not found!");
@@ -112,4 +131,4 @@ const getVideoStatus = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, video, "video status fetched successfully!"));
 });
 
-module.exports = { getAllVideos, getVideoByFileName, getVideoStatus };
+module.exports = { getAllVideos, getVideoByFileName, getVideoById, getVideoStatus };

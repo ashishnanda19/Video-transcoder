@@ -3,6 +3,7 @@ const { asyncHandler } = require("../utils/asyncHandler.js");
 
 const { enqueueJobInQueue } = require("../db/redis.js");
 const { decodeS3EventKey } = require("../utils/s3Key.js");
+const { webhookVideoQuery } = require("../utils/webhookQuery.js");
 
 const { VIDEO_PROCESS_STATES } = require("../constants.js");
 
@@ -70,6 +71,7 @@ const handleS3Trigger = asyncHandler(async (req, res) => {
   // If a slot is free (and, on GPU, the ASG is scaling 0 -> 1) it is dispatched immediately; otherwise it
   // simply waits in Redis for the next freed slot.
   await enqueueJobInQueue({
+    videoId: String(video._id), // the container echoes this back so its callback hits THIS record
     fileName,
     objectKey: key,
     progress: VIDEO_PROCESS_STATES.QUEUED,
@@ -92,9 +94,10 @@ const handleS3Trigger = asyncHandler(async (req, res) => {
 const handleECSTrigger = asyncHandler(async (req, res) => {
   console.log("Trigger from ECS.....");
   //webhook
-  const { key, progress, videoResolutions } = req.body;
+  const { key, jobId, progress, videoResolutions } = req.body;
 
-  const video = await Video.findOne({ objectKey: key });
+  const lookup = webhookVideoQuery({ key, jobId });
+  const video = await (lookup.sort ? Video.findOne(lookup.filter).sort(lookup.sort) : Video.findOne(lookup.filter));
 
   if (!video) {
     return res.status(404).json({ message: "video not found!" });

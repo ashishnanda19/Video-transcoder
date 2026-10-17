@@ -26,6 +26,7 @@ function buildRunTaskInput(job, env = process.env) {
   const environment = [
     { name: "OBJECT_KEY", value: job.objectKey },
     { name: "KEY", value: job.objectKey }, // Alias for older code
+    ...(job.videoId ? [{ name: "JOB_ID", value: String(job.videoId) }] : []), // echoed back in every webhook
     { name: "TEMP_S3_BUCKET_NAME", value: tempBucket },
     { name: "BUCKET", value: tempBucket }, // Alias for older code
     { name: "FINAL_S3_BUCKET_NAME", value: finalBucket },

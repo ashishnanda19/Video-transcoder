@@ -6,9 +6,28 @@ console.log("Webhook URL:", webhook || "(not set: status callbacks are skipped)"
 
 // With no WEBHOOK_URL (e.g. scripts/verify-aws.js, where nothing public can receive the callback) the job still
 // runs; the caller reads the result from ECS/S3 instead. A set-but-failing webhook still fails the job.
-const post = async (body) => {
+const jobId = process.env.JOB_ID;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// A lost callback leaves the job "starting" forever and its concurrency slot taken, so retry transient failures
+// (server restarting, tunnel hiccup, cold start) with backoff: 2s, 4s, 8s, 16s, 32s.
+const post = async (body, { attempts = 6, baseDelayMs = 2000 } = {}) => {
   if (!webhook) return { status: 200, skipped: true };
-  return axios.post(webhook, body);
+  let lastError;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await axios.post(webhook, { ...body, ...(jobId ? { jobId } : {}) }, { timeout: 15000 });
+    } catch (error) {
+      lastError = error;
+      const status = error.response && error.response.status;
+      if (status && status >= 400 && status < 500 && status !== 408 && status !== 429) break; // a client error will not fix itself
+      if (i < attempts - 1) {
+        console.log(`Webhook attempt ${i + 1} failed (${status || error.code || error.message}); retrying...`);
+        await sleep(baseDelayMs * 2 ** i);
+      }
+    }
+  }
+  throw lastError;
 };
 
 const markTaskCompleted = async (key, allFilesObjects) => {

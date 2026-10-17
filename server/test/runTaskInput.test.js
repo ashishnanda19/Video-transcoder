@@ -56,3 +56,9 @@ test("RunTask `failures` (which do not throw) are surfaced as errors", () => {
   assert.throws(() => assertRunTaskSucceeded({ tasks: [], failures: [] }), /no task returned/);
   assert.deepEqual(assertRunTaskSucceeded({ tasks: [{ taskArn: "arn:t" }], failures: [] }), { taskArn: "arn:t" });
 });
+
+test("the job id is passed to the container so its webhooks can name the record", () => {
+  const withId = buildRunTaskInput({ ...job, videoId: "665f1c0e8f1b2c3d4e5f6a7b" }, gpuEnv);
+  assert.equal(envOf(withId).JOB_ID, "665f1c0e8f1b2c3d4e5f6a7b");
+  assert.equal(envOf(buildRunTaskInput(job, gpuEnv)).JOB_ID, undefined, "jobs queued before ids existed still launch");
+});

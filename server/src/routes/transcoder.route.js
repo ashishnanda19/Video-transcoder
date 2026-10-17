@@ -6,6 +6,7 @@ const {
 const {
   getAllVideos,
   getVideoByFileName,
+  getVideoById,
   getVideoStatus,
 } = require("../controllers/video.contoller.js");
 const {
@@ -24,6 +25,7 @@ router.get("/get-video-urls",isAuthenticated, getFinalBucketvideoURL);
 
 router.get("/get-all-videos", isAuthenticated, getAllVideos);
 router.get("/v/:fileName",isAuthenticated, getVideoByFileName);
+router.get("/id/:videoId", isAuthenticated, getVideoById);
 router.get("/s/:videoId",isAuthenticated, getVideoStatus);
 
 module.exports = router;

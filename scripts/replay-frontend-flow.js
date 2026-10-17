@@ -2,7 +2,8 @@
 // Replays what the browser does (video-transcoder-client upload + assets pages) against a running local server,
 // including the CORS checks a browser would make from http://localhost:3000. Use it to catch problems before clicking.
 //
-//   node scripts/replay-frontend-flow.js [--server http://localhost:8000/api/v1] [--origin http://localhost:3000] [--input clip.mp4] [--timeout-min 15]
+//   node scripts/replay-frontend-flow.js [--server http://localhost:8000/api/v1] [--origin http://localhost:3000] [--input clip.mp4] [--file-name same.mp4] [--timeout-min 15]
+//   (--file-name re-uploads under a fixed name, to test two uploads of the same file)
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -39,7 +40,7 @@ async function api(p, opts = {}) {
     execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30:duration=10",
       "-f", "lavfi", "-i", "sine=frequency=440:duration=10", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", input]);
   }
-  const fileName = `fe-test-${Date.now()}.mp4`;
+  const fileName = arg("--file-name", `fe-test-${Date.now()}.mp4`);
   const base = fileName.split(".")[0];
   const size = fs.statSync(input).size;
 
@@ -56,13 +57,14 @@ async function api(p, opts = {}) {
   log(`uploaded ${fileName}; waiting for S3 -> Lambda -> server -> ECS`);
 
   // assets page: poll /video/v/:fileName then /video/s/:id
+  const uploadedAt = Date.now() - 5000;
   let video = null;
   const deadline = Date.now() + TIMEOUT_MIN * 60000;
   let last = "";
   while (Date.now() < deadline) {
     if (!video) {
       const v = await api(`/video/v/${base}`);
-      if (v.res.ok) { video = v.body.data; log(`server created the video record (Lambda reached the server): ${video._id}`); }
+      if (v.res.ok && new Date(v.body.data.createdAt).getTime() >= uploadedAt) { video = v.body.data; log(`server created the video record (Lambda reached the server): ${video._id}`); }
     }
     if (video) {
       const s = await api(`/video/s/${video._id}`);
