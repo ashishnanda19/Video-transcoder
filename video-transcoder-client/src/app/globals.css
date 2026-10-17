@@ -119,3 +119,44 @@
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
   }
 }
+
+/* ---- closing-section demo: a file drops in, uploads, and four versions pop out (loops every 6.5 s) ---- */
+@layer utilities {
+  .cta-file { animation: cta-file 6.5s cubic-bezier(.4,0,.2,1) infinite; }
+  .cta-progress { animation: cta-progress 6.5s linear infinite; }
+  .cta-chip { animation: cta-chip 6.5s cubic-bezier(.34,1.4,.64,1) infinite; animation-delay: calc(var(--i, 0) * 0.22s); }
+  .cta-cursor { animation: cta-cursor 6.5s cubic-bezier(.4,0,.2,1) infinite; }
+}
+@keyframes cta-file {
+  0% { opacity: 0; transform: translate(150px, -80px) rotate(10deg) scale(.92); }
+  10% { opacity: 1; }
+  28% { opacity: 1; transform: translate(0, 0) rotate(0) scale(1); }
+  42% { opacity: 1; transform: translate(0, 0) scale(1); }
+  50% { opacity: 0; transform: translate(0, 8px) scale(.9); }
+  100% { opacity: 0; transform: translate(0, 8px) scale(.9); }
+}
+@keyframes cta-cursor {
+  0% { opacity: 0; transform: translate(190px, -110px); }
+  8% { opacity: 1; }
+  28% { opacity: 1; transform: translate(34px, 8px); }
+  34% { opacity: 1; transform: translate(34px, 8px) scale(.9); }
+  46% { opacity: 0; transform: translate(34px, 8px); }
+  100% { opacity: 0; }
+}
+@keyframes cta-progress {
+  0%, 30% { width: 0; opacity: 0; }
+  34% { opacity: 1; }
+  54% { width: 100%; opacity: 1; }
+  60% { width: 100%; opacity: 0; }
+  100% { width: 0; opacity: 0; }
+}
+@keyframes cta-chip {
+  0%, 57% { opacity: 0; transform: translateY(14px) scale(.85); }
+  66% { opacity: 1; transform: translateY(0) scale(1); }
+  92% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-4px) scale(.98); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cta-chip { animation: none; opacity: 1; transform: none; }
+  .cta-file, .cta-progress, .cta-cursor { animation: none; opacity: 0; }
+}
