@@ -18,7 +18,7 @@ async function processQueue() {
       for (let i = 0; i < jobsToProcess; i++) {
         const job = await deQueueJobFromQueue();
         if (job) {
-          job.progress = VIDEO_PROCESS_STATES.PROCESSING;
+          job.progress = VIDEO_PROCESS_STATES.STARTING;
 
           await increment(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT);
           await triggerTranscodingJob(job);

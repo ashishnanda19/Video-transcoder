@@ -30,6 +30,14 @@ services:
         sync: false
       - key: ECS_SECURITY_GROUP
         sync: false
+      - key: TRANSCODE_MODE
+        value: cpu
+      - key: GPU_CLUSTER
+        sync: false
+      - key: GPU_TASK
+        sync: false
+      - key: GPU_CAPACITY_PROVIDER
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

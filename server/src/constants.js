@@ -2,6 +2,7 @@
 const VIDEO_PROCESS_STATES = {
     PENDING: "pending",
     QUEUED: "queued",
+    STARTING: "starting", // task launched; on GPU it may sit in ECS PROVISIONING while the ASG scales 0 -> 1
     PROCESSING: "processing",
     COMPLETED: "completed",
     FAILED: "failed",

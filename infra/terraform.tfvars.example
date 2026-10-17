@@ -1,0 +1,7 @@
+# cp terraform.tfvars.example terraform.tfvars   (terraform.tfvars is git-ignored)
+region               = "ap-south-1"
+asg_max_size         = 2
+alarm_email          = "you@example.com"
+billing_alarm_usd    = 50
+# server_iam_user_name = "video-transcoder-server"
+# subnet_ids         = ["subnet-aaa", "subnet-bbb"]   # public subnets; default = default VPC

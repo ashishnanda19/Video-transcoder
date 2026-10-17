@@ -83,7 +83,7 @@ const handleS3Trigger = asyncHandler(async (req, res) => {
     const job = {
       fileName,
       objectKey: key,
-      progress: VIDEO_PROCESS_STATES.PROCESSING,
+      progress: VIDEO_PROCESS_STATES.STARTING,
     };
 
     await triggerTranscodingJob(job);
@@ -144,6 +144,16 @@ const handleECSTrigger = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "video not found!" });
   }
 
+  if (progress === VIDEO_PROCESS_STATES.PROCESSING) {
+    // The container is up (STARTING -> PROCESSING). The job still holds its slot, so don't decrement.
+    // Never move a finished job backwards if pings arrive out of order.
+    if (video.progress === VIDEO_PROCESS_STATES.STARTING || video.progress === VIDEO_PROCESS_STATES.QUEUED) {
+      video.progress = VIDEO_PROCESS_STATES.PROCESSING;
+      await video.save();
+    }
+    return res.status(200).json({ message: "Processing state recorded" });
+  }
+
   if (progress === VIDEO_PROCESS_STATES.COMPLETED) {
     video.progress = VIDEO_PROCESS_STATES.COMPLETED;
     video.videoResolutions = videoResolutions;
@@ -181,7 +191,7 @@ const handleECSTrigger = asyncHandler(async (req, res) => {
   if (availableSlots > 0) {
     for (const i = 0; i < availableSlots; i++) {
       let job = await deQueueJobFromQueue();
-      job.progress = VIDEO_PROCESS_STATES.PROCESSING;
+      job.progress = VIDEO_PROCESS_STATES.STARTING;
 
       await increment(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT);
       await triggerTranscodingJob(job);
