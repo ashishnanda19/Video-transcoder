@@ -1,16 +1,17 @@
-# Only video-transcoder-client is built on Vercel (the project's Root Directory). Keep everything else out of the upload.
-AWSCLIV2.pkg
-*.pkg
-*.zip
-*.tfstate*
-.terraform
-infra
-docs
-assets
-server
-ecs-task
-upload-trigger-api
-scripts
-Dockerfile.api
-.dockerignore
-render.yaml
+# Only video-transcoder-client is built on Vercel (the project's Root Directory). Keep the rest of the repo out of the upload.
+#
+# Every pattern starts with "/" so it matches ONLY at the repository root. Without it, "assets" also matched the UI's own
+# src/app/(dashboard)/assets page folder, which silently removed the /assets page from the deployed site.
+/AWSCLIV2.pkg
+/*.pkg
+/*.zip
+/infra
+/docs
+/assets
+/server
+/ecs-task
+/upload-trigger-api
+/scripts
+/Dockerfile.api
+/.dockerignore
+/render.yaml

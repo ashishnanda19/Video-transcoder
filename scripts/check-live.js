@@ -41,6 +41,11 @@ const json = (body) => ({ method: "POST", headers: { "Content-Type": "applicatio
     const a = await get(asset);
     ok(a.status === 200 && /immutable/.test(a.headers.get("cache-control") || ""), "hashed assets are cached for a year", a.headers.get("cache-control") || "none");
   }
+  // Every page of the app must exist in the deployed build (a packaging mistake once dropped /assets and nothing noticed).
+  for (const page of ["/signin", "/upload", "/assets", "/user", "/settings"]) {
+    const r = await get(page);
+    ok(r.status === 200, `${page} page is deployed`, `HTTP ${r.status}`);
+  }
   for (const legal of ["/privacy", "/terms"]) {
     const r = await get(legal);
     ok(r.status === 200, `${legal} page is served (Google requires a privacy policy and terms)`, `HTTP ${r.status}`);
