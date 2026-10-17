@@ -15,6 +15,8 @@ if (!config.authDisabled && (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGL
   process.exit(1);
 }
 
+const path = require("node:path");
+const fs = require("node:fs");
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
@@ -35,7 +37,32 @@ async function main() {
   // Behind CloudFront / API Gateway / a load balancer: believe X-Forwarded-* (client IP, protocol).
   app.set("trust proxy", true);
   app.disable("x-powered-by");
-  app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+  const s3Origin = `https://*.s3.${process.env.AWS_REGION || "ap-south-1"}.amazonaws.com`;
+  const crisp = process.env.CSP_ALLOW_CRISP === "true"; // only if the optional Crisp chat widget is built in
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      // What the UI really loads: its own files, avatars, and videos/uploads that go straight to/from S3 over signed URLs.
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", ...(crisp ? ["https://client.crisp.chat"] : [])], // Next's static export inlines its bootstrap
+          styleSrc: ["'self'", "'unsafe-inline'", ...(crisp ? ["https://client.crisp.chat"] : [])],
+          imgSrc: ["'self'", "data:", "blob:", "https://lh3.googleusercontent.com", "https://github.com", "https://avatars.githubusercontent.com", ...(crisp ? ["https://*.crisp.chat"] : [])],
+          mediaSrc: ["'self'", "blob:", s3Origin],
+          connectSrc: ["'self'", s3Origin, ...(crisp ? ["https://*.crisp.chat", "wss://*.relay.crisp.chat"] : [])],
+          fontSrc: ["'self'", "data:", ...(crisp ? ["https://client.crisp.chat"] : [])],
+          frameSrc: crisp ? ["https://*.crisp.chat"] : ["'none'"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          frameAncestors: ["'none'"],
+          upgradeInsecureRequests: config.production ? [] : null,
+        },
+      },
+    })
+  );
 
   // The public site is HTTPS-only, but intermediate hops may not forward the protocol. Without this, express-session
   // refuses to set a `secure` cookie and sign-in silently fails.
@@ -84,7 +111,6 @@ async function main() {
     configurePassport(config);
   }
 
-  app.get("/", (req, res) => res.status(200).json({ message: "Hello from root!" }));
   // Liveness only (does not touch the database), so a database hiccup never makes the platform kill a healthy process.
   app.get("/health", (req, res) => res.status(200).json({ ok: true }));
   app.get("/api/v1/health", (req, res) => res.status(200).json({ ok: true }));
@@ -92,7 +118,31 @@ async function main() {
   app.use("/api/v1/video", transcoderRoutes);
   app.use("/api/v1/user", userRoutes);
 
-  app.use((req, res) => res.status(404).json({ success: false, message: "Not found" }));
+  // The exported UI (built into the image at ./public). Hashed assets are cached for a year; pages are always revalidated.
+  const publicDir = path.join(__dirname, "public");
+  const hasUi = fs.existsSync(path.join(publicDir, "index.html"));
+  if (hasUi) {
+    app.use(
+      express.static(publicDir, {
+        index: "index.html", // /upload/ -> /upload/index.html (a bare /upload is redirected to /upload/)
+        setHeaders: (res, file) => {
+          res.setHeader(
+            "Cache-Control",
+            file.includes(`${path.sep}_next${path.sep}static${path.sep}`) ? "public, max-age=31536000, immutable" : "no-cache"
+          );
+        },
+      })
+    );
+  }
+
+  if (!hasUi) app.get("/", (req, res) => res.status(200).json({ message: "Hello from root!" }));
+
+  app.use((req, res) => {
+    if (hasUi && !req.path.startsWith("/api/") && req.accepts("html")) {
+      return res.status(404).sendFile(path.join(publicDir, "404.html"));
+    }
+    return res.status(404).json({ success: false, message: "Not found" });
+  });
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
     console.error("Unhandled error:", err);
