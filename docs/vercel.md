@@ -32,6 +32,10 @@ npx vercel env add NEXT_PUBLIC_CONTACT_EMAIL production      # then paste your p
 npx vercel --prod
 ```
 
+> **Already have a Vercel project from the old Render setup?** It still has `NEXT_PUBLIC_BACKEND_URL` pointing at Render. The UI no longer reads that variable
+> (a build with it set contains no Render address, which I tested), but delete it to avoid confusion:
+> `npx vercel env rm NEXT_PUBLIC_BACKEND_URL production` (and for `preview`/`development` if asked). The old Render service is no longer used: suspend it in the Render dashboard.
+
 > If the API's address ever changes (the API Gateway is re-created), update the `destination` in `video-transcoder-client/vercel.json` to `terraform output -raw api_url` + `/api/:path*` and redeploy.
 
 ## 2. Tell AWS what the public address is

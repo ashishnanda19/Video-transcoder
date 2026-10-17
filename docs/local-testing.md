@@ -81,7 +81,7 @@ Then:
 
 ```bash
 cd server && npm install && npm run dev
-cd video-transcoder-client && npm install && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000/api/v1 npm run dev   # http://localhost:3000
+cd video-transcoder-client && npm install && npm run dev      # http://localhost:3000 (talks to http://localhost:8000/api/v1 by default)
 ```
 
 Upload a small video (the UI caps at 30 MB). Expected: Mongo status `queued → starting → processing → completed`, four files in the final bucket, preview works.
