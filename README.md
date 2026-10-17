@@ -30,7 +30,7 @@ A walkthrough of the app: sign in with Google, upload a video, watch it move thr
 
 ## Architecture
 
-![Video Transcoder Service System Design](./assets/vidflow-aws-architecture.png)
+![Video Transcoder Service System Design](./assets/vidflow-architecture-diagram.png)
 
 The original diagram (without the CUDA stage) is still available at [assets/video-transcoder-system-design.png](./assets/video-transcoder-system-design.png).
 
