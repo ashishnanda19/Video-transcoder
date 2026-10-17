@@ -255,6 +255,18 @@ data "aws_iam_policy_document" "compute" {
       values   = ["vidflow"]
     }
   }
+  # The launch template tags its instances/volumes (Project=vidflow). Auto Scaling validates that the caller could
+  # launch them WITH those tags, so launch-time tagging must be allowed (and only launch-time: no retagging).
+  statement {
+    sid       = "Ec2TagInstancesAndVolumesAtLaunch"
+    actions   = ["ec2:CreateTags"]
+    resources = ["arn:aws:ec2:*:${local.acct}:instance/*", "arn:aws:ec2:*:${local.acct}:volume/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:CreateAction"
+      values   = ["RunInstances"]
+    }
+  }
   # Creating an Auto Scaling group from a launch template validates that the caller could launch it.
   statement {
     sid       = "Ec2RunInstancesForAutoScalingValidation"

@@ -289,6 +289,8 @@ async function preflight(ctx) {
       [true, "iam:CreateRole", `arn:aws:iam::${acct}:role/${prefix}-gpu-task`, [], "create a vidflow-* role"],
       [true, "iam:PassRole", `arn:aws:iam::${acct}:role/${prefix}-gpu-task`, ctxKey("iam:PassedToService", "ecs-tasks.amazonaws.com"), "pass a vidflow role to ECS"],
       [true, "iam:AttachRolePolicy", `arn:aws:iam::${acct}:role/${prefix}-gpu-task`, ctxKey("iam:PolicyARN", "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"), "attach a known managed policy"],
+      [true, "ec2:CreateTags", `arn:aws:ec2:${REGION}:${acct}:instance/*`, ctxKey("ec2:CreateAction", "RunInstances"), "tag instances at launch (ASG launch template)"],
+      [false, "ec2:CreateTags", `arn:aws:ec2:${REGION}:${acct}:instance/*`, ctxKey("ec2:CreateAction", "CreateTags"), "retag existing instances"],
       [true, "ecr:CreateRepository", `arn:aws:ecr:${REGION}:${acct}:repository/${names.cpuRepo}`, [], "create a vidflow ECR repo"],
       [true, "ecs:CreateCluster", `arn:aws:ecs:${REGION}:${acct}:cluster/${names.cpuCluster}`, [], "create a vidflow ECS cluster"],
       [true, "logs:CreateLogGroup", `arn:aws:logs:${REGION}:${acct}:log-group:/ecs/${prefix}-cpu`, [], "create a vidflow log group"],
