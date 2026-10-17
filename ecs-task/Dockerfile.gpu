@@ -58,6 +58,8 @@ RUN npm ci --omit=dev
 FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu22.04
 ARG CUDA_APT_VERSION
 
+# NVIDIA_VISIBLE_DEVICES=all only matters outside ECS (docker run --gpus all). On ECS the agent overrides it with the
+# GPU it assigned, and it must NOT be set in the task definition (ECS rejects that).
 # video = NVENC/NVDEC libs, compute = CUDA, utility = nvidia-smi. Without `video`, h264_nvenc cannot load.
 ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \

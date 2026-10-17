@@ -123,10 +123,11 @@ resource "aws_ecs_task_definition" "transcoder" {
 
     resourceRequirements = [{ type = "GPU", value = "1" }]
 
+    # Do NOT set NVIDIA_VISIBLE_DEVICES here: ECS reserves it when resourceRequirements has a GPU and rejects the
+    # task definition (it injects the id of the GPU it assigned). NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+    # comes from the image's ENV (ecs-task/Dockerfile.gpu).
     environment = [
       { name = "TRANSCODE_MODE", value = "gpu" },
-      { name = "NVIDIA_VISIBLE_DEVICES", value = "all" },
-      { name = "NVIDIA_DRIVER_CAPABILITIES", value = "compute,video,utility" },
       { name = "AWS_REGION", value = var.region },
       { name = "TEMP_S3_BUCKET_NAME", value = var.temp_bucket_name },
       { name = "FINAL_S3_BUCKET_NAME", value = var.final_bucket_name },
