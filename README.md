@@ -49,10 +49,14 @@ The project is organized into several components:
 
 
 
+## GPU transcoding
+
+Transcoding can run on NVIDIA GPUs (NVDEC → CUDA scale → NVENC) on ECS-on-EC2 with an Auto Scaling Group that scales to **zero** when idle. It is switched with `TRANSCODE_MODE=gpu|cpu` on the server; the original Fargate/CPU path is kept. See [docs/gpu-migration.md](docs/gpu-migration.md) for deploy/teardown, cost, benchmarking, and the end-to-end test checklist.
+
 ## Features
 
 - Automatically transcodes uploaded videos into multiple resolutions (360p, 480p, 720p, 1080p).
-- Rate limiting to ensure a maximum of 5 concurrent video transcoding jobs.
+- Rate limiting with a configurable concurrency cap (`MAX_CONCURRENT_JOBS`; 5 on CPU, derived from GPU capacity on GPU).
 - Integration with MongoDB for storing video metadata and status.
 - Utilizes signed URLs for secure uploads and downloads from S3.
 - Leverages AWS EventBridge for triggering transcoding tasks upon video upload events.
