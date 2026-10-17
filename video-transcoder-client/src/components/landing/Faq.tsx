@@ -38,6 +38,10 @@ export function Faq() {
         : "The pipeline is built on NVIDIA CUDA (NVDEC decode, CUDA scaling, NVENC encode, all four resolutions in parallel) and it falls back to CPU automatically. Right now jobs run on CPU, still decoding once and encoding all four versions in parallel; the GPU path switches on as GPU capacity is enabled.",
     },
     {
+      q: "What runs behind the scenes?",
+      a: "Everything is orchestrated on AWS: your file lands in Amazon S3, a Lambda function triggers the job, Amazon ECS launches an isolated transcoding worker (Fargate on CPU today, GPU instances for CUDA), and API Gateway fronts the API. The whole stack is defined as code with Terraform.",
+    },
+    {
       q: "Can I download everything at once?",
       a: "Yes. Every video page has a one-click ZIP of all four versions, plus individual downloads and an in-browser player with a resolution switcher.",
     },

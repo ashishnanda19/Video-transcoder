@@ -25,7 +25,7 @@ const FEATURES = [
   { icon: Radio, title: "Live progress", body: "Follow each video from queued to ready in real time. Close the tab and come back; it keeps going." },
   { icon: Download, title: "Preview and download", body: "Play any version in the browser with a resolution switcher, grab one file, or download all four as a ZIP." },
   { icon: Lock, title: "Private by default", body: "Files go straight to private cloud storage over short-lived signed links. Only you can play or download them." },
-  { icon: Cpu, title: "CUDA-accelerated pipeline", body: "Decode once, scale on the GPU, encode all four resolutions in parallel with NVENC. Each job runs in its own isolated container." },
+  { icon: Cpu, title: "CUDA-accelerated pipeline", body: "Decode once, scale on the GPU, encode all four resolutions in parallel with NVENC. Each job runs in its own isolated container, orchestrated on AWS." },
   { icon: Trash2, title: "You stay in control", body: "Delete any video whenever you like. Everything is removed automatically after a set number of days." },
 ];
 

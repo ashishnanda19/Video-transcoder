@@ -4,6 +4,8 @@ This project implements a distributed video transcoding system with a leaky buck
 
 **Powered by NVIDIA CUDA:** the pipeline decodes each video once (NVDEC), scales it on the GPU (CUDA) and encodes all four resolutions in parallel (NVENC), with an automatic CPU fallback.
 
+**Orchestrated on AWS:** the whole job lifecycle runs on AWS managed services (S3, Lambda, ECS, API Gateway, CloudWatch) and is defined as code with Terraform.
+
 
 
 ## Project Demo
