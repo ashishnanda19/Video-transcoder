@@ -1,6 +1,8 @@
-
-// Set NEXT_PUBLIC_BACKEND_URL in your Vercel environment variables
-// Format: https://<your-render-app>.onrender.com/api/v1
+// Where the API lives.
+//  - production build: same origin, under /api/v1 (CloudFront routes /api/* to the API), so cookies are first-party
+//    and there is no CORS.
+//  - local development: the API runs on its own port.
+// Override with NEXT_PUBLIC_BACKEND_URL at build time (e.g. to point a local UI at a remote API).
 export const SERVER =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  "http://localhost:8000/api/v1";
+  (process.env.NODE_ENV === "production" ? "/api/v1" : "http://localhost:8000/api/v1");

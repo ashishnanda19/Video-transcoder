@@ -32,7 +32,7 @@ export function useSignOut() {
   const router = useRouter();
   return async () => {
     try {
-      await api.get("/user/logout");
+      await api.post("/user/logout");
     } finally {
       dispatch(userNotExist());
       router.push("/");

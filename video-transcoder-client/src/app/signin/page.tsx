@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, Check } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,14 @@ const POINTS = [
   "Private storage with signed links",
 ];
 
+// Why a sign-in attempt ended up back here (the server redirects with ?error=...).
+const ERRORS: Record<string, string> = {
+  not_allowed: "That Google account isn't on the access list. Ask the owner to add your email, or try another account.",
+  denied: "Sign-in was cancelled or Google refused it. Please try again.",
+  server: "Something went wrong while signing you in. Please try again in a moment.",
+  expired: "Your session expired. Please sign in again.",
+};
+
 function GoogleG() {
   return (
     <svg viewBox="0 0 48 48" className="h-5 w-5" aria-hidden>
@@ -29,19 +37,47 @@ function GoogleG() {
   );
 }
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
+  const params = useSearchParams();
   const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(false);
+  const errorKey = params.get("error");
+  const error = errorKey ? ERRORS[errorKey] ?? ERRORS.server : null;
 
-  useEffect(() => { if (isAuthenticated) router.replace("/upload"); }, [isAuthenticated, router]);
+  // Someone who is already signed in has no business here, unless they were just bounced for being refused.
+  useEffect(() => { if (isAuthenticated && !errorKey) router.replace("/upload"); }, [isAuthenticated, errorKey, router]);
 
   const login = () => {
     setLoading(true);
-    // The server owns the OAuth flow: this endpoint redirects to Google and, afterwards, back to /upload.
-    window.location.href = `${SERVER}/user/login`;
+    // The server owns the OAuth flow: this endpoint redirects to Google and, afterwards, back into the app.
+    window.location.href = `${SERVER}/user/google`;
   };
 
+  return (
+    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="w-full max-w-sm">
+      <div className="mb-8 lg:hidden"><Logo /></div>
+      <h2 className="text-3xl font-semibold tracking-tight">Welcome back</h2>
+      <p className="mt-2 text-sm text-muted-foreground">Sign in to upload videos and manage your library.</p>
+
+      {error && (
+        <div role="alert" className="mt-6 flex items-start gap-2.5 rounded-xl border border-destructive/30 bg-destructive/10 p-3.5 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>{error}</p>
+        </div>
+      )}
+
+      <Button variant="secondary" size="lg" className="mt-6 h-12 w-full gap-3 bg-card text-[15px]" loading={loading} onClick={login}>
+        {!loading && <GoogleG />} Continue with Google
+      </Button>
+      <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
+        We only read your name, email and profile picture. Access is limited to approved accounts.
+      </p>
+    </motion.div>
+  );
+}
+
+export default function SignInPage() {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
       <div className="noise relative hidden overflow-hidden bg-brand-deep-animated animate-gradient-pan p-12 text-white lg:flex lg:flex-col lg:justify-between">
@@ -67,17 +103,10 @@ export default function SignInPage() {
           <ThemeToggle />
         </div>
         <div className="flex flex-1 items-center justify-center">
-          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="w-full max-w-sm">
-            <div className="mb-8 lg:hidden"><Logo /></div>
-            <h2 className="text-3xl font-semibold tracking-tight">Welcome back</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Sign in to upload videos and manage your library.</p>
-            <Button variant="secondary" size="lg" className="mt-8 h-12 w-full gap-3 bg-card text-[15px]" loading={loading} onClick={login}>
-              {!loading && <GoogleG />} Continue with Google
-            </Button>
-            <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
-              By continuing you agree to our terms of service. We only read your name, email and avatar.
-            </p>
-          </motion.div>
+          {/* useSearchParams needs a Suspense boundary for static export */}
+          <Suspense fallback={null}>
+            <SignInForm />
+          </Suspense>
         </div>
       </div>
     </div>

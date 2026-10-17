@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Film, Loader2, Play } from "lucide-react";
-import { getRenditionUrl, type Video } from "@/lib/api";
+import { getRenditionUrl, type Rung, type Video } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const thumbCache = new Map<string, { url: string; at: number }>();
@@ -13,8 +13,8 @@ export function VideoThumb({ video, className }: { video: Video; className?: str
   const [src, setSrc] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
   const [painted, setPainted] = useState(false);
-  const file = video.videoResolutions?.["360p"] || video.videoResolutions?.["480p"] || video.videoResolutions?.["720p"];
-  const ready = video.progress === "completed" && !!file;
+  const thumbRung: Rung | undefined = (["360p", "480p", "720p"] as Rung[]).find((r) => video.videoResolutions?.[r]);
+  const ready = video.progress === "completed" && !!thumbRung;
 
   useEffect(() => {
     const el = box.current;
@@ -25,15 +25,15 @@ export function VideoThumb({ video, className }: { video: Video; className?: str
   }, []);
 
   useEffect(() => {
-    if (!ready || !visible || !file) return;
+    if (!ready || !visible || !thumbRung) return;
     const hit = thumbCache.get(video._id);
     if (hit && Date.now() - hit.at < 10 * 60_000) { setSrc(hit.url); return; }
     let cancelled = false;
-    getRenditionUrl(video, file)
+    getRenditionUrl(video._id, thumbRung)
       .then((url) => { thumbCache.set(video._id, { url, at: Date.now() }); if (!cancelled) setSrc(url); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [ready, visible, file, video]);
+  }, [ready, visible, thumbRung, video]);
 
   const failed = video.progress === "failed";
   return (

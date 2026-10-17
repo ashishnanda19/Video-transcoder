@@ -24,7 +24,7 @@ export function useRenditionUrls(video: Video | null | undefined, enabled = true
     setLoading(true);
     setError(null);
     Promise.all(
-      RUNGS.filter((r) => video.videoResolutions?.[r]).map(async (r) => [r, await getRenditionUrl(video, video.videoResolutions![r]!)] as const)
+      RUNGS.filter((r) => video.videoResolutions?.[r]).map(async (r) => [r, await getRenditionUrl(video._id, r)] as const)
     )
       .then((pairs) => {
         const map = Object.fromEntries(pairs) as UrlMap;

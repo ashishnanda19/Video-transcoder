@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/components/ui/use-toast";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { getUploadUrl, RUNGS } from "@/lib/api";
+import { apiErrorMessage, createUpload, RUNGS } from "@/lib/api";
 import { formatBytes, formatDuration } from "@/lib/format";
 import { DIMS } from "@/components/video/VideoPlayer";
 import { cn } from "@/lib/utils";
@@ -73,12 +73,13 @@ export default function UploadPage() {
     setError(null); setProgress(0); setSpeed(0);
     try {
       setPhase("preparing");
-      const url = await getUploadUrl(file.name, file.type);
-      if (!url) throw new Error("The server did not return an upload link");
+      // The server validates the file, creates its record and signs a link for exactly this size and type.
+      const { videoId, uploadUrl } = await createUpload(file);
+      if (!uploadUrl) throw new Error("The server did not return an upload link");
 
       setPhase("uploading");
       const t0 = performance.now();
-      await putWithProgress(url, file, (loaded, total) => {
+      await putWithProgress(uploadUrl, file, (loaded, total) => {
         setProgress(loaded / total);
         setSpeed(loaded / Math.max(0.25, (performance.now() - t0) / 1000));
       }, handle.current);
@@ -86,12 +87,11 @@ export default function UploadPage() {
       setPhase("done");
       setProgress(1);
       toast({ title: "Upload complete", description: "Your video is now in the transcoding queue.", variant: "success" });
-      // Same name the server derives (everything before the first dot) so the detail page can find the record.
-      setTimeout(() => router.push(`/assets?fileName=${encodeURIComponent(file.name.split(".")[0])}`), 700);
+      setTimeout(() => router.push(`/assets?id=${videoId}`), 700);
     } catch (e: any) {
       if (e?.message === "aborted") { setPhase("idle"); setProgress(0); return; }
       setPhase("error");
-      setError(e?.response?.status === 401 ? "Your session expired. Please sign in again." : e?.message || "Something went wrong");
+      setError(apiErrorMessage(e)); // includes the server's own reason (limits, validation)
     }
   };
 

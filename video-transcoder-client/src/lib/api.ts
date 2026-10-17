@@ -28,6 +28,23 @@ export const isTerminal = (s?: VideoStatus) => s === "completed" || s === "faile
 
 export const api = axios.create({ baseURL: SERVER, withCredentials: true });
 
+// A 401 anywhere except the initial "who am I?" probe means the session expired mid-use: send the user to sign in
+// again instead of leaving a page that silently fails.
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const url: string = error?.config?.url ?? "";
+    if (typeof window !== "undefined" && error?.response?.status === 401 && !url.includes("current-user")) {
+      window.location.assign("/signin/?error=expired");
+    }
+    return Promise.reject(error);
+  }
+);
+
+// The server's own explanation (limits, validation) when it sent one, else a fallback.
+export const apiErrorMessage = (error: any, fallback = "Something went wrong") =>
+  error?.response?.data?.message || error?.message || fallback;
+
 type Envelope<T> = { data: T };
 
 export async function listVideos(opts: { status?: "all" | VideoStatus; query?: string; limit?: number } = {}) {
@@ -47,15 +64,20 @@ export async function getVideoById(id: string) {
   return data.data;
 }
 
-export async function getUploadUrl(fileName: string, contentType: string) {
-  const { data } = await api.get<Envelope<string>>("/video/get-upload-url", { params: { fileName, contentType } });
+// Step 1 of an upload: the server validates, creates the record and returns a signed URL for exactly this file.
+export async function createUpload(file: { name: string; type: string; size: number }) {
+  const { data } = await api.post<Envelope<{ videoId: string; uploadUrl: string; expiresIn: number }>>("/video/uploads", {
+    fileName: file.name,
+    contentType: file.type,
+    size: file.size,
+  });
   return data.data;
 }
 
-// Signed GET URL for one rendition file (expires, so fetch it when needed rather than storing it).
-export async function getRenditionUrl(video: Pick<Video, "fileName">, file: string) {
-  const { data } = await api.get<Envelope<string>>("/video/get-video-urls", {
-    params: { fileName: video.fileName, videoUrl: file },
+// Signed GET URL for one rendition (expires, so fetch it when needed rather than storing it).
+export async function getRenditionUrl(videoId: string, rung: Rung, opts: { download?: boolean } = {}) {
+  const { data } = await api.get<Envelope<string>>(`/video/id/${encodeURIComponent(videoId)}/rendition/${rung}`, {
+    params: opts.download ? { download: 1 } : undefined,
   });
   return data.data;
 }

@@ -33,7 +33,7 @@ async function fetchBlob(url: string, onProgress?: (fraction: number) => void): 
 export async function downloadRendition(video: Video, rung: Rung, onProgress?: (fraction: number) => void) {
   const file = video.videoResolutions?.[rung];
   if (!file) throw new Error(`No ${rung} rendition`);
-  const blob = await fetchBlob(await getRenditionUrl(video, file), onProgress);
+  const blob = await fetchBlob(await getRenditionUrl(video._id, rung), onProgress);
   saveBlob(blob, `${video.fileName}-${rung}.mp4`);
 }
 
@@ -44,7 +44,7 @@ export async function downloadAllAsZip(video: Video, onProgress?: (fraction: num
   let done = 0;
   await Promise.all(
     rungs.map(async (rung) => {
-      const blob = await fetchBlob(await getRenditionUrl(video, video.videoResolutions![rung]!));
+      const blob = await fetchBlob(await getRenditionUrl(video._id, rung));
       zip.file(`${video.fileName}-${rung}.mp4`, blob);
       done += 1;
       onProgress?.(done / rungs.length);
