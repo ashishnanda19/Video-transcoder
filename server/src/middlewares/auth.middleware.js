@@ -39,6 +39,16 @@ const isAuthenticated = async (req, res, next) => {
   }
 };
 
+// For routes that answer differently when signed out (instead of rejecting): in the local-dev bypass, act as the dev user.
+const devUserIfBypassed = async (req, res, next) => {
+  try {
+    if (authDisabled()) req.user = await getDevUser();
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
+
 // S3 -> Lambda -> server: the Lambda holds the shared secret. With no secret configured (local dev only; production
 // refuses to boot without one) the check is skipped.
 const requireWebhookSecret = (req, res, next) => {
@@ -47,4 +57,4 @@ const requireWebhookSecret = (req, res, next) => {
   return res.status(401).json({ success: false, message: "Invalid webhook credentials" });
 };
 
-module.exports = { isAuthenticated, requireWebhookSecret, authDisabled };
+module.exports = { isAuthenticated, devUserIfBypassed, requireWebhookSecret, authDisabled };

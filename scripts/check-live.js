@@ -77,6 +77,9 @@ const json = (body) => ({ method: "POST", headers: { "Content-Type": "applicatio
     const r = await get(p, method === "POST" ? json(body || {}) : {});
     ok(r.status === 401, `${method} ${p.replace(/[a-f0-9]{24}/, ":id")}`, `HTTP ${r.status}`);
   }
+  const me = await get("/api/v1/user/me");
+  const meBody = await me.json().catch(() => ({}));
+  ok(me.status === 200 && meBody.data === null, "GET /api/v1/user/me answers 'not signed in' with a clean 200 (no console error for visitors)", `HTTP ${me.status}`);
   const forged = await get("/api/v1/video/get-all-videos", { headers: { Cookie: "vidflow.sid=s%3Aforged.cookie; connect.sid=anything" } });
   ok(forged.status === 401, "forged session cookies are rejected", `HTTP ${forged.status}`);
 

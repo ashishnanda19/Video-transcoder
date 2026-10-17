@@ -9,6 +9,15 @@ const getCurrentUser = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, { displayName, email, avatar }, "User fetched successfully"));
 });
 
+// "Who am I?" for the UI's first request. Signed out is a normal answer here (200, data null), not an error, so
+// anonymous visitors do not get a red 401 in their browser console. The protected current-user route still 401s.
+const getMe = asyncHandler(async (req, res) => {
+  const signedIn = req.user && (typeof req.isAuthenticated !== "function" || req.isAuthenticated() || req.user.googleId === "local-dev");
+  if (!signedIn) return res.status(200).json(new ApiResponse(200, null, "Not signed in"));
+  const { displayName, email, avatar } = req.user;
+  return res.status(200).json(new ApiResponse(200, { displayName, email, avatar }, "User fetched successfully"));
+});
+
 // POST (not GET) so a third-party page cannot log users out with an <img> tag; also destroys the server-side session.
 const logoutUser = (req, res, next) => {
   const finish = () => {
@@ -21,4 +30,4 @@ const logoutUser = (req, res, next) => {
   else finish();
 };
 
-module.exports = { getCurrentUser, logoutUser, SESSION_COOKIE };
+module.exports = { getCurrentUser, getMe, logoutUser, SESSION_COOKIE };

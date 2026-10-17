@@ -14,9 +14,10 @@ export function useAuth({ requireAuth = false }: { requireAuth?: boolean } = {})
 
   useEffect(() => {
     if (!loader) return;
+    // /user/me answers 200 with data=null when signed out, so anonymous visits log no 401 in the console.
     api
-      .get("/user/current-user")
-      .then((res) => dispatch(userExist(res.data.data)))
+      .get("/user/me")
+      .then((res) => (res.data.data ? dispatch(userExist(res.data.data)) : dispatch(userNotExist())))
       .catch(() => dispatch(userNotExist()));
   }, [loader, dispatch]);
 

@@ -1,6 +1,7 @@
 const express = require("express");
 const passport = require("passport");
-const { getCurrentUser, logoutUser } = require("../controllers/user.controller.js");
+const { getCurrentUser, getMe, logoutUser } = require("../controllers/user.controller.js");
+const { devUserIfBypassed } = require("../middlewares/auth.middleware.js");
 const { isAuthenticated, authDisabled } = require("../middlewares/auth.middleware.js");
 const { loadConfig } = require("../config.js");
 
@@ -40,6 +41,7 @@ if (authDisabled()) {
   });
 }
 
+router.get("/me", devUserIfBypassed, getMe);
 router.get("/current-user", isAuthenticated, getCurrentUser);
 router.post("/logout", isAuthenticated, logoutUser);
 

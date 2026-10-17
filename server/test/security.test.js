@@ -105,3 +105,9 @@ test("AUTH_DISABLED only ever takes effect outside production", () => {
   assert.equal(loadConfig({ AUTH_DISABLED: "true" }).authDisabled, true);
   assert.equal(loadConfig({ ...prodEnv, AUTH_DISABLED: "true" }).authDisabled, false);
 });
+
+test("/user/me treats 'signed out' as a normal answer, but the protected route still rejects", () => {
+  const src = require("node:fs").readFileSync(require("node:path").join(__dirname, "../src/routes/user.route.js"), "utf8");
+  assert.match(src, /router\.get\("\/me", devUserIfBypassed, getMe\)/);
+  assert.match(src, /router\.get\("\/current-user", isAuthenticated, getCurrentUser\)/, "current-user must stay behind isAuthenticated (401)");
+});
