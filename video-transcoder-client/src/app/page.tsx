@@ -8,6 +8,7 @@ import {
 import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CtaSection } from "@/components/landing/CtaSection";
+import { CudaSection } from "@/components/landing/CudaSection";
 import { Faq } from "@/components/landing/Faq";
 import { HeroVideo } from "@/components/landing/HeroVideo";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ const FEATURES = [
   { icon: Radio, title: "Live progress", body: "Follow each video from queued to ready in real time. Close the tab and come back; it keeps going." },
   { icon: Download, title: "Preview and download", body: "Play any version in the browser with a resolution switcher, grab one file, or download all four as a ZIP." },
   { icon: Lock, title: "Private by default", body: "Files go straight to private cloud storage over short-lived signed links. Only you can play or download them." },
-  { icon: Cpu, title: "Isolated, elastic encoding", body: "Every job runs in its own container, queued fairly. GPU acceleration is built in and switches on when capacity is added." },
+  { icon: Cpu, title: "CUDA-accelerated pipeline", body: "Decode once, scale on the GPU, encode all four resolutions in parallel with NVENC. Each job runs in its own isolated container." },
   { icon: Trash2, title: "You stay in control", body: "Delete any video whenever you like. Everything is removed automatically after a set number of days." },
 ];
 
@@ -57,6 +58,7 @@ export default function Page() {
           <Logo />
           <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
             <a href="#features" className="transition hover:text-foreground">Features</a>
+            <a href="#cuda" className="transition hover:text-foreground">CUDA</a>
             <a href="#how" className="transition hover:text-foreground">How it works</a>
             <a href="#faq" className="transition hover:text-foreground">FAQ</a>
           </nav>
@@ -74,7 +76,7 @@ export default function Page() {
         <section className="container pb-20 pt-14 text-center md:pt-20">
           <div style={{ animationDelay: "0ms" }} className="animate-fade-up mx-auto mb-6 inline-flex items-center gap-2 rounded-full border bg-card/80 px-3.5 py-1.5 text-xs font-medium text-muted-foreground shadow-soft backdrop-blur">
             <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping-soft rounded-full bg-success" /><span className="relative inline-flex h-2 w-2 rounded-full bg-success" /></span>
-            Free to use · Sign in with Google
+            <span className="h-1.5 w-1.5 rounded-full bg-[#76b900]" /> Parallel encoding · Built on NVIDIA CUDA
           </div>
           <h1 style={{ animationDelay: "60ms" }} className="animate-fade-up mx-auto max-w-4xl text-balance text-5xl font-semibold leading-[1.04] tracking-tight md:text-7xl">
             Transcode once.<br /><span className="text-gradient">Play everywhere.</span>
@@ -96,7 +98,7 @@ export default function Page() {
 
         <section className="border-y bg-card/50">
           <div className="container grid grid-cols-2 gap-8 py-10 md:grid-cols-4">
-            {[["4", "resolutions from one upload"], ["< 1 min", "for a short clip, end to end"], ["H.264 + AAC", "plays on every device"], ["Private", "signed links, deletable anytime"]].map(([big, small]) => (
+            {[["4× parallel", "resolutions encoded at once"], ["CUDA", "NVDEC → scale → NVENC pipeline"], ["< 1 min", "for a short clip, end to end"], ["H.264 + AAC", "plays on every device"]].map(([big, small]) => (
               <div key={small} className="text-center">
                 <p className="text-2xl font-semibold tracking-tight text-gradient md:text-3xl">{big}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{small}</p>
@@ -124,6 +126,8 @@ export default function Page() {
             ))}
           </div>
         </section>
+
+        <CudaSection />
 
         <section id="how" className="container scroll-mt-20 pb-24">
           <div className="mx-auto mb-14 max-w-2xl text-center">

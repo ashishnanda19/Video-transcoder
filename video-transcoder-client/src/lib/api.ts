@@ -82,8 +82,9 @@ export interface PublicConfig {
   maxUploadMb: number;
   retentionDays: number;
   dailyUploadsPerUser: number;
+  acceleration: "gpu" | "cpu";
 }
-export const DEFAULT_CONFIG: PublicConfig = { maxUploadMb: 30, retentionDays: 30, dailyUploadsPerUser: 20 };
+export const DEFAULT_CONFIG: PublicConfig = { maxUploadMb: 30, retentionDays: 30, dailyUploadsPerUser: 20, acceleration: "cpu" };
 
 export async function getPublicConfig() {
   const { data } = await api.get<Envelope<PublicConfig>>("/video/config");

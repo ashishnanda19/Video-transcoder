@@ -164,7 +164,13 @@ const getPublicConfig = (req, res) =>
   res.status(200).json(
     new ApiResponse(
       200,
-      { maxUploadMb: Math.round(MAX_UPLOAD_BYTES / 1024 / 1024), retentionDays: config.retentionDays, dailyUploadsPerUser: config.limits.uploadsPerUserPerDay },
+      {
+        maxUploadMb: Math.round(MAX_UPLOAD_BYTES / 1024 / 1024),
+        retentionDays: config.retentionDays,
+        dailyUploadsPerUser: config.limits.uploadsPerUserPerDay,
+        // "gpu" only while jobs really run on NVIDIA GPUs (TRANSCODE_MODE=gpu); the UI words its claims from this.
+        acceleration: (process.env.TRANSCODE_MODE || "cpu").toLowerCase() === "gpu" ? "gpu" : "cpu",
+      },
       "ok"
     )
   );

@@ -7,7 +7,7 @@ import { useConfig } from "@/hooks/useConfig";
 import { cn } from "@/lib/utils";
 
 export function Faq() {
-  const { maxUploadMb, retentionDays, dailyUploadsPerUser } = useConfig();
+  const { maxUploadMb, retentionDays, dailyUploadsPerUser, acceleration } = useConfig();
   const [open, setOpen] = useState<number | null>(0);
 
   const items = [
@@ -30,6 +30,12 @@ export function Faq() {
     {
       q: "What do you do with my Google account?",
       a: "Google sign-in is used only to know who you are. We read your name, email address and profile picture, nothing else, and we don't see your password. You can revoke access any time from your Google account.",
+    },
+    {
+      q: "Does VidFlow really use NVIDIA GPUs?",
+      a: acceleration === "gpu"
+        ? "Yes. Your videos are decoded with NVDEC, scaled with CUDA and encoded with NVENC, all on NVIDIA GPUs, with all four resolutions produced in parallel."
+        : "The pipeline is built on NVIDIA CUDA (NVDEC decode, CUDA scaling, NVENC encode, all four resolutions in parallel) and it falls back to CPU automatically. Right now jobs run on CPU, still decoding once and encoding all four versions in parallel; the GPU path switches on as GPU capacity is enabled.",
     },
     {
       q: "Can I download everything at once?",
