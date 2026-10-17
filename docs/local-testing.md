@@ -13,7 +13,7 @@ the transcoding itself runs in AWS (Fargate CPU now, GPU once the quota is appro
 
 ## Level A: verify the AWS stack
 
-> **Use a VidFlow-only AWS profile** (`export AWS_PROFILE=vidflow`, see *Isolation* in `docs/gpu-migration.md`). The verifier and Terraform both refuse another project's (`aegis`) credentials.
+> **Use the VidFlow-only AWS profile** (`export AWS_PROFILE=vidflow`; created by `infra/bootstrap`, see *Isolation from other projects* in `docs/gpu-migration.md`). The verifier and Terraform both refuse another project's (`aegis`) credentials.
 
 ```bash
 # 0. See what is deployed and what is missing (read-only, free)

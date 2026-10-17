@@ -1,0 +1,5 @@
+# cp terraform.tfvars.example terraform.tfvars   (git-ignored)
+bootstrap_profile   = "default"      # an ADMIN profile, used only for this one-time bootstrap
+allowed_account_ids = ["027738434026"]
+# protected_prefixes = ["aegis"]      # other projects in this account the deploy identity must never touch
+# keep these equal to infra/: temp_bucket_name, final_bucket_name, server_iam_user_name

@@ -273,6 +273,45 @@ async function preflight(ctx) {
     if (leaks.length) return { status: "FAIL", detail: leaks.slice(0, 3).join("; ") };
     return `${principals.length} principals x ${foreign.length} foreign bucket(s) (${foreign.join(", ")}): all denied`;
   });
+  await check("Deploy identity is scoped: VidFlow actions allowed, other projects and escalation denied", async () => {
+    const deploy = await aws(["iam", "get-user", "--user-name", `${prefix}-deploy`], { allowFail: true });
+    if (!deploy) return { status: "SKIP", detail: `${prefix}-deploy not created (cd infra/bootstrap && terraform apply)` };
+    const acct = ctx.account, arn = deploy.User.Arn;
+    const other = ctx.avoid[0];
+    const ctxKey = (name, value) => ["--context-entries", `ContextKeyName=${name},ContextKeyValues=${value},ContextKeyType=string`];
+    const decide = async (action, resource, extra = []) =>
+      (await aws(["iam", "simulate-principal-policy", "--policy-source-arn", arn, "--action-names", action, "--resource-arns", resource, ...extra]))
+        .EvaluationResults[0].EvalDecision === "allowed";
+    const cases = [
+      // [expected allowed?, action, resource, extra args, label]
+      [true, "s3:PutBucketCors", `arn:aws:s3:::${names.temp}`, [], "configure the VidFlow temp bucket"],
+      [true, "lambda:CreateFunction", `arn:aws:lambda:${REGION}:${acct}:function:${names.lambda}`, [], "create the VidFlow Lambda"],
+      [true, "iam:CreateRole", `arn:aws:iam::${acct}:role/${prefix}-gpu-task`, [], "create a vidflow-* role"],
+      [true, "iam:PassRole", `arn:aws:iam::${acct}:role/${prefix}-gpu-task`, ctxKey("iam:PassedToService", "ecs-tasks.amazonaws.com"), "pass a vidflow role to ECS"],
+      [true, "iam:AttachRolePolicy", `arn:aws:iam::${acct}:role/${prefix}-gpu-task`, ctxKey("iam:PolicyARN", "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"), "attach a known managed policy"],
+      [true, "ecr:CreateRepository", `arn:aws:ecr:${REGION}:${acct}:repository/${names.cpuRepo}`, [], "create a vidflow ECR repo"],
+      [true, "ecs:CreateCluster", `arn:aws:ecs:${REGION}:${acct}:cluster/${names.cpuCluster}`, [], "create a vidflow ECS cluster"],
+      [true, "logs:CreateLogGroup", `arn:aws:logs:${REGION}:${acct}:log-group:/ecs/${prefix}-cpu`, [], "create a vidflow log group"],
+      [true, "sns:CreateTopic", `arn:aws:sns:${REGION}:${acct}:${prefix}-gpu-alarms`, [], "create a vidflow SNS topic"],
+      [false, "s3:GetObject", `arn:aws:s3:::${other}-evidence-${acct}/x`, [], `read ${other} data`],
+      [false, "s3:DeleteBucket", `arn:aws:s3:::${other}-frontend-${acct}`, [], `delete ${other} buckets`],
+      [false, "iam:PassRole", `arn:aws:iam::${acct}:role/${other}-ecs-task`, ctxKey("iam:PassedToService", "ecs-tasks.amazonaws.com"), `use ${other}'s roles`],
+      [false, "iam:DeleteRole", `arn:aws:iam::${acct}:role/${other}-ecs-task`, [], `delete ${other}'s roles`],
+      [false, "iam:CreateAccessKey", `arn:aws:iam::${acct}:user/${other}-deploy`, [], `mint keys for ${other}'s user`],
+      [false, "ecs:DeleteCluster", `arn:aws:ecs:${REGION}:${acct}:cluster/${other}-main`, [], `delete ${other} ECS clusters`],
+      [false, "iam:CreateRole", `arn:aws:iam::${acct}:role/not-${prefix}-role`, [], "create roles outside vidflow-*"],
+      [false, "iam:AttachRolePolicy", `arn:aws:iam::${acct}:role/${prefix}-gpu-task`, ctxKey("iam:PolicyARN", "arn:aws:iam::aws:policy/AdministratorAccess"), "attach AdministratorAccess to a role"],
+      [false, "iam:CreatePolicyVersion", `arn:aws:iam::${acct}:policy/${prefix}-deploy-iam`, [], "rewrite its own policy"],
+      [false, "iam:AttachUserPolicy", arn, ctxKey("iam:PolicyARN", "arn:aws:iam::aws:policy/AdministratorAccess"), "attach policies to itself"],
+      [false, "iam:CreateUser", `arn:aws:iam::${acct}:user/someone-else`, [], "create arbitrary users"],
+    ];
+    const wrong = [];
+    for (const [shouldAllow, action, resource, extra, label] of cases) {
+      if ((await decide(action, resource, extra)) !== shouldAllow) wrong.push(`${shouldAllow ? "cannot" : "CAN"} ${label}`);
+    }
+    if (wrong.length) return { status: "FAIL", detail: wrong.join("; ") };
+    return `${cases.length} cases behave as intended`;
+  }, "review infra/bootstrap/main.tf and terraform apply it");
   await check("VidFlow resources carry the Project=vidflow tag", async () => {
     const r = await aws(["resourcegroupstaggingapi", "get-resources", "--tag-filters", "Key=Project,Values=vidflow"]);
     const n = r.ResourceTagMappingList.length;

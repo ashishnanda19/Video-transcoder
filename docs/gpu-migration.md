@@ -235,21 +235,34 @@ Rules this repo enforces:
 Genuinely shared, and unavoidable: the AWS account itself, its default VPC (VidFlow only reads it and adds its own security groups), and the account-wide
 EC2 *G and VT* vCPU quota (raising it for VidFlow also raises it for anyone else in the account).
 
-**Set up a VidFlow-only deploy identity** (once, with an admin identity; the console is fine):
+**The VidFlow-only deploy identity is Terraform too** (`infra/bootstrap/`, its own state). Chicken-and-egg: a user cannot create itself, so this root is applied
+**once** with an admin identity; from then on everything runs as `vidflow-deploy`.
 
 ```bash
-aws iam create-user --user-name vidflow-deploy
-# Attach the permissions Terraform needs (IAM, ECS, EC2/ASG, ECR, S3, Lambda, Logs, SNS, CloudWatch, SSM read, Service Quotas).
-# AdministratorAccess is the quick start; it is as powerful as any other deploy user, so tighten it to vidflow-* ARNs later.
-aws iam attach-user-policy --user-name vidflow-deploy --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
-aws iam create-access-key --user-name vidflow-deploy        # then:
-aws configure --profile vidflow                               # paste that key
-aws sts get-caller-identity --profile vidflow                 # must show user/vidflow-deploy
+cd infra/bootstrap
+terraform init && terraform apply       # admin profile, once: creates user vidflow-deploy + 4 scoped policies (no access key)
+./create-profile.sh                     # mints the key straight into the local AWS CLI profile "vidflow"; never printed, never in Terraform state
+export AWS_PROFILE=vidflow              # from now on: terraform in infra/, scripts/verify-aws.js, the local server, docker/ecr login
+aws sts get-caller-identity             # must say user/vidflow-deploy
 ```
 
-Then use it everywhere: `export AWS_PROFILE=vidflow` (or `aws_profile = "vidflow"` in `terraform.tfvars`, and `--profile vidflow` on `scripts/verify-aws.js`).
-Also pin the account with `allowed_account_ids = ["<id>"]` so Terraform can never run against a different one.
+What `vidflow-deploy` can do (`infra/bootstrap/main.tf`, four policies, each under IAM's 6144-character limit):
+
+- Only `vidflow-*` IAM roles / policies / instance profiles and the single `vidflow-server` user; only the four AWS managed policies VidFlow uses can be attached to roles (so a role can never get `AdministratorAccess`); `PassRole` only to ECS tasks, EC2 and Lambda.
+- Only `vidflow-*` ECS clusters, capacity providers, ECR repos, Auto Scaling groups, log groups, alarms and SNS topics; the `video-transcoder-*` Lambda; the two VidFlow buckets; EC2 launch templates and security groups **only if tagged `Project=vidflow`**.
+- **Explicit Deny** (beats every Allow) on IAM, S3, ECS, ECR, Lambda, Logs, SNS, CloudWatch and Auto Scaling resources of `protected_prefixes` (default `aegis`).
+- **Explicit Deny** on changing itself: its own policies, extra keys, extra policy attachments.
+- Unavoidable wildcards, because AWS offers no resource-level control for them: `ec2:Describe*`, `ecs:RegisterTaskDefinition`/`CreateCapacityProvider`, `ec2:RunInstances` (Auto Scaling validates it), `s3:ListAllMyBuckets`, `servicequotas:*` (quotas are account-wide).
+
+`node scripts/verify-aws.js preflight` re-proves this with the IAM simulator (20 allow/deny cases, including "cannot touch aegis" and "cannot escalate").
+Honest limit: IAM write access is inherently powerful. The scoping stops *accidental* cross-project changes and blocks the obvious escalations; it is not a defence against a malicious deployer (that would need a permissions boundary on every role).
+
+If `terraform apply` in `infra/` ever fails with `AccessDenied` for a VidFlow resource, the fix is a one-line addition in `infra/bootstrap/main.tf` and re-applying the bootstrap, not switching to an admin identity.
+Keep `temp_bucket_name`, `final_bucket_name` and `server_iam_user_name` identical in `infra/` and `infra/bootstrap/`.
+Also pin the account with `allowed_account_ids = ["<id>"]` in `infra/terraform.tfvars` so Terraform can never run against a different one.
 Do not reuse another project's access keys for the Render/local server either: the server uses the `vidflow-server` user.
+
+**Teardown order:** `cd infra && terraform destroy` (as `vidflow`), then delete the deploy key (`aws iam delete-access-key --user-name vidflow-deploy --access-key-id <id>` as admin, and `aws configure` removal of the profile), then `cd infra/bootstrap && terraform destroy` (admin).
 
 ## Rolling back to CPU
 
