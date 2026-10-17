@@ -14,6 +14,8 @@ set -euo pipefail
 PREFIX="${SSM_PREFIX:-/vidflow/prod}"
 REGION="${AWS_REGION:-ap-south-1}"
 RESET=0; [ "${1:-}" = "--reset" ] && RESET=1
+# ALLOW_PARTIAL=1: with no terminal, skip values that were not supplied instead of aborting (set them in a later run).
+PARTIAL="${ALLOW_PARTIAL:-0}"
 
 exists() { aws ssm get-parameter --name "$PREFIX/$1" --region "$REGION" >/dev/null 2>&1; }
 put()    { aws ssm put-parameter --name "$PREFIX/$1" --type SecureString --value "$2" --overwrite --region "$REGION" >/dev/null; }
@@ -24,7 +26,10 @@ ask() {
   if [ "$RESET" = 0 ] && exists "$name"; then echo "  [kept]    $name (already set)"; return; fi
   value="${!name:-}"
   if [ -z "$value" ]; then
-    [ -t 0 ] || { echo "  [missing] $name and no terminal to ask on" >&2; exit 1; }
+    if [ ! -t 0 ]; then
+      [ "$PARTIAL" = 1 ] && { echo "  [skipped] $name (not supplied yet)"; return; }
+      echo "  [missing] $name and no terminal to ask on (use ALLOW_PARTIAL=1 to skip it)" >&2; exit 1
+    fi
     read -rsp "  $what: " value; echo
   fi
   if ! [[ "$value" =~ $re ]]; then echo "  [reject]  $name does not look right. $hint" >&2; exit 1; fi
