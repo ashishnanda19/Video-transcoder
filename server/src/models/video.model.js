@@ -28,6 +28,21 @@ const videoSchema = new mongoose.Schema(
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      index: true,
+    },
+
+    // where this upload's renditions live in the final bucket ("videos/<id>"); records from before this field
+    // existed fall back to "videos/<fileName>"
+    outputPrefix: {
+      type: String,
+    },
+
+    originalName: {
+      type: String,
+    },
+
+    sizeBytes: {
+      type: Number,
     },
 
     progress: {

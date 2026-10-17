@@ -25,13 +25,16 @@ const finalBucketName = process.env.FINAL_S3_BUCKET_NAME;
 
 const videoName = KEY.split("/").pop();
 const originalFileName = videoName.split(".")[0]; // Remove file extension
+// Each upload has its own output folder (the server passes "videos/<video id>"); the old per-file-name folder is only
+// a fallback for jobs started by an older server.
+const OUTPUT_PREFIX = (process.env.OUTPUT_PREFIX || `videos/${originalFileName}`).replace(/\/+$/, "");
 
 async function uploadOutput(output) {
   console.log(`Uploading ${output.file} video to S3...`);
   await s3client.send(
     new PutObjectCommand({
       Bucket: finalBucketName,
-      Key: `videos/${originalFileName}/${output.file}`,
+      Key: `${OUTPUT_PREFIX}/${output.file}`,
       Body: fs.createReadStream(path.resolve(output.path)),
       ContentType: "video/mp4",
     })

@@ -1,42 +1,50 @@
 const User = require("../models/user.model.js");
-const { ApiError } = require("../utils/ApiError.js");
-const { asyncHandler } = require("../utils/asyncHandler.js");
+const { loadConfig } = require("../config.js");
+const { verifySharedSecret } = require("../utils/webhookAuth.js");
 
-// Local development only: AUTH_DISABLED=true skips Google login so the app can run on localhost without OAuth keys.
-// Refused in production so it can never be switched on by accident on a deployed server.
-const LOCAL_DEV_USER = {
-  displayName: "Local Dev",
-  googleId: "local-dev",
-  email: "local-dev@localhost",
-  avatar: "https://github.com/shadcn.png",
+const config = loadConfig();
+
+// Local development only (never in production, see config.js): skip Google and act as one stored dev user, so
+// ownership and quotas behave exactly as they do for real users.
+const authDisabled = () => config.authDisabled;
+let devUser;
+const getDevUser = () => {
+  // Cache the resolved promise (.exec()), not the Mongoose query: a query can only be executed once.
+  devUser ??= User.findOneAndUpdate(
+    { googleId: "local-dev" },
+    { $set: { displayName: "Local Dev", email: "local-dev@localhost", avatar: "https://github.com/shadcn.png" } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  )
+    .lean()
+    .exec()
+    .catch((error) => {
+      devUser = undefined; // do not cache a failure
+      throw error;
+    });
+  return devUser;
 };
-const authDisabled = () => process.env.AUTH_DISABLED === "true" && process.env.NODE_ENV !== "production";
 
-const isAuthenticated = asyncHandler(async (req, _, next) => {
-  if (authDisabled()) {
-    req.user = LOCAL_DEV_USER;
-    return next();
-  }
+// A request is authenticated only if Passport restored a user from a valid server-side session.
+// (This used to check only that *some* connect.sid cookie existed, which any client could fake.)
+const isAuthenticated = async (req, res, next) => {
   try {
-    // const token =
-    //   req.cookies?.accessToken ||
-    //   req.header("Authorization")?.replace("Bearer ", "");
-
-    console.log(req.cookies);
-    const token = req.cookies["connect.sid"];
-    console.log(token);
-
-    if (!token) {
-      throw new ApiError(401, "Unauthorized request");
+    if (authDisabled()) {
+      req.user = await getDevUser();
+      return next();
     }
-
-    next();
+    if (typeof req.isAuthenticated === "function" && req.isAuthenticated() && req.user) return next();
+    return res.status(401).json({ success: false, message: "Authentication required" });
   } catch (error) {
-    throw new ApiError(401, error?.message || "Invalid Token");
+    return next(error);
   }
-});
-
-module.exports = {
-  isAuthenticated,
-  authDisabled,
 };
+
+// S3 -> Lambda -> server: the Lambda holds the shared secret. With no secret configured (local dev only; production
+// refuses to boot without one) the check is skipped.
+const requireWebhookSecret = (req, res, next) => {
+  if (!config.webhookSecret) return next();
+  if (verifySharedSecret(req.get("x-webhook-secret"), config.webhookSecret)) return next();
+  return res.status(401).json({ success: false, message: "Invalid webhook credentials" });
+};
+
+module.exports = { isAuthenticated, requireWebhookSecret, authDisabled };

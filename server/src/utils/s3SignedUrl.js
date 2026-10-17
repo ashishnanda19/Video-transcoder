@@ -12,51 +12,39 @@ const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.MY_AWS_
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || "ap-south-1",
-  // No static keys configured -> the SDK default chain (AWS_PROFILE, SSO, role).
+  // No static keys configured -> the SDK default chain (the ECS task role in production, AWS_PROFILE locally).
   ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
 });
 
-async function getObjectURL(key, bucketName) {
-  try {
-    const command = new GetObjectCommand({
-      Bucket: bucketName,
-      Key: key,
-    });
+const tempBucket = () => process.env.TEMP_S3_BUCKET_NAME || "video-transcoder-temp-ashish";
+const finalBucket = () => process.env.FINAL_S3_BUCKET_NAME || "video-transcoder-final-ashish";
 
-    const url = await getSignedUrl(s3Client, command);
-    return url;
-  } catch (error) {
-    console.log("Error ocuur while generating the getObjectURL: ", error);
-  }
+// Presigned upload. ContentLength is part of the signature, so S3 rejects a body that is not exactly the size the
+// server already validated: the client cannot claim 1 MB and upload 5 GB.
+async function putObjectURL({ key, contentType, size, expiresIn = 300 }) {
+  const command = new PutObjectCommand({ Bucket: tempBucket(), Key: key, ContentType: contentType, ContentLength: size });
+  return getSignedUrl(s3Client, command, { expiresIn });
 }
 
-async function putObjectURL(fileName, contentType, bucketName) {
-  try {
-    const command = new PutObjectCommand({
-      Bucket: bucketName,
-      Key: `uploads/videos/${fileName}`,
-      ContentType: contentType,
-    });
-
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 180 });
-    return url;
-  } catch (error) {
-    console.log("Error ocuur while generating the putObjectURL: ", error);
-  }
+// Signed download/stream URL for a rendition. `downloadName` forces a save-as with that file name.
+async function getObjectURL(key, { downloadName, expiresIn = 900 } = {}) {
+  const command = new GetObjectCommand({
+    Bucket: finalBucket(),
+    Key: key,
+    ...(downloadName
+      ? { ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}` }
+      : {}),
+  });
+  return getSignedUrl(s3Client, command, { expiresIn });
 }
 
 async function deleteObjectFile(key) {
   try {
-    const command = new DeleteObjectCommand({
-      Bucket: process.env.TEMP_S3_BUCKET_NAME || "video-transcoder-temp-ashish",
-      Key: key,
-    });
-
-    await s3Client.send(command);
+    await s3Client.send(new DeleteObjectCommand({ Bucket: tempBucket(), Key: key }));
     console.log("File successfully deleted from TEMP_S3_BUCKET");
   } catch (error) {
-    console.log("Error ocuur while deleting the object file: ", error);
+    console.log("Error occurred while deleting the object file: ", error);
   }
 }
 
-module.exports = { getObjectURL, putObjectURL, deleteObjectFile };
+module.exports = { putObjectURL, getObjectURL, deleteObjectFile };

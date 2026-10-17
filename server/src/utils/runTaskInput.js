@@ -1,6 +1,8 @@
 // Pure RunTask construction/validation -- no AWS SDK import, so it is unit-testable offline.
 // TRANSCODE_MODE=gpu -> ECS on EC2 GPU instances via a capacity provider (scale-from-zero ASG)
 // TRANSCODE_MODE=cpu -> the original Fargate path. This single flag is the rollback switch.
+const { signJob } = require("./webhookAuth.js");
+
 const getMode = (env = process.env) => (env.TRANSCODE_MODE || "cpu").toLowerCase();
 
 // Transcode tuning knobs forwarded verbatim to the container when set on the server.
@@ -22,16 +24,22 @@ function buildRunTaskInput(job, env = process.env) {
   const mode = getMode(env);
   const tempBucket = env.TEMP_S3_BUCKET_NAME || "video-transcoder-temp-ashish";
   const finalBucket = env.FINAL_S3_BUCKET_NAME || "video-transcoder-final-ashish";
+  const webhookUrl =
+    env.WEBHOOK_URL || (env.PUBLIC_URL ? `${env.PUBLIC_URL.replace(/\/+$/, "")}/api/v1/video/ecs-trigger` : "");
 
   const environment = [
     { name: "OBJECT_KEY", value: job.objectKey },
     { name: "KEY", value: job.objectKey }, // Alias for older code
     ...(job.videoId ? [{ name: "JOB_ID", value: String(job.videoId) }] : []), // echoed back in every webhook
+    // Proves to the server that the callback comes from THIS job's container (HMAC of the job id, not the secret itself).
+    ...(job.videoId && env.WEBHOOK_SECRET ? [{ name: "JOB_TOKEN", value: signJob(job.videoId, env.WEBHOOK_SECRET) }] : []),
+    ...(job.outputPrefix ? [{ name: "OUTPUT_PREFIX", value: job.outputPrefix }] : []), // where renditions are written
     { name: "TEMP_S3_BUCKET_NAME", value: tempBucket },
     { name: "BUCKET", value: tempBucket }, // Alias for older code
     { name: "FINAL_S3_BUCKET_NAME", value: finalBucket },
-    // Must be reachable FROM AWS (a public URL or tunnel). Omitted when unset: the worker then skips callbacks.
-    ...(env.WEBHOOK_URL ? [{ name: "WEBHOOK_URL", value: env.WEBHOOK_URL }] : []),
+    // Must be reachable FROM AWS (a public URL or tunnel). In production it is derived from PUBLIC_URL.
+    // Omitted when neither is set: the worker then skips callbacks.
+    ...(webhookUrl ? [{ name: "WEBHOOK_URL", value: webhookUrl }] : []),
     { name: "TRANSCODE_MODE", value: mode },
     ...PASSTHROUGH_ENV.filter((n) => env[n]).map((n) => ({ name: n, value: env[n] })),
   ];

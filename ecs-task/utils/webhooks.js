@@ -7,6 +7,7 @@ console.log("Webhook URL:", webhook || "(not set: status callbacks are skipped)"
 // With no WEBHOOK_URL (e.g. scripts/verify-aws.js, where nothing public can receive the callback) the job still
 // runs; the caller reads the result from ECS/S3 instead. A set-but-failing webhook still fails the job.
 const jobId = process.env.JOB_ID;
+const jobToken = process.env.JOB_TOKEN; // HMAC(secret, jobId): proves this callback comes from this job's container
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // A lost callback leaves the job "starting" forever and its concurrency slot taken, so retry transient failures
@@ -16,7 +17,11 @@ const post = async (body, { attempts = 6, baseDelayMs = 2000 } = {}) => {
   let lastError;
   for (let i = 0; i < attempts; i++) {
     try {
-      return await axios.post(webhook, { ...body, ...(jobId ? { jobId } : {}) }, { timeout: 15000 });
+      return await axios.post(
+        webhook,
+        { ...body, ...(jobId ? { jobId } : {}) },
+        { timeout: 15000, headers: jobToken ? { "X-Job-Token": jobToken } : {} }
+      );
     } catch (error) {
       lastError = error;
       const status = error.response && error.response.status;

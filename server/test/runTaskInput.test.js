@@ -62,3 +62,19 @@ test("the job id is passed to the container so its webhooks can name the record"
   assert.equal(envOf(withId).JOB_ID, "665f1c0e8f1b2c3d4e5f6a7b");
   assert.equal(envOf(buildRunTaskInput(job, gpuEnv)).JOB_ID, undefined, "jobs queued before ids existed still launch");
 });
+
+test("each job gets its own signed token and output prefix", () => {
+  const { signJob } = require("../src/utils/webhookAuth.js");
+  const env = { ...gpuEnv, WEBHOOK_SECRET: "x".repeat(40) };
+  const e = envOf(buildRunTaskInput({ ...job, videoId: "665f1c0e8f1b2c3d4e5f6a7b", outputPrefix: "videos/665f1c0e8f1b2c3d4e5f6a7b" }, env));
+  assert.equal(e.JOB_TOKEN, signJob("665f1c0e8f1b2c3d4e5f6a7b", env.WEBHOOK_SECRET));
+  assert.notEqual(e.JOB_TOKEN, env.WEBHOOK_SECRET, "the shared secret itself must never be sent to a container");
+  assert.equal(e.OUTPUT_PREFIX, "videos/665f1c0e8f1b2c3d4e5f6a7b");
+  assert.equal(envOf(buildRunTaskInput({ ...job, videoId: "665f1c0e8f1b2c3d4e5f6a7b" }, gpuEnv)).JOB_TOKEN, undefined, "no secret configured -> no token");
+});
+
+test("the container webhook URL is derived from PUBLIC_URL when WEBHOOK_URL is not set", () => {
+  const e = envOf(buildRunTaskInput(job, { ...gpuEnv, PUBLIC_URL: "https://site.example.net/" }));
+  assert.equal(e.WEBHOOK_URL, "https://site.example.net/api/v1/video/ecs-trigger");
+  assert.equal(envOf(buildRunTaskInput(job, { ...gpuEnv, WEBHOOK_URL: "https://custom/x", PUBLIC_URL: "https://site.example.net" })).WEBHOOK_URL, "https://custom/x");
+});
