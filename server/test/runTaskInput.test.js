@@ -29,13 +29,15 @@ test("gpu mode requires its own cluster/task/capacity-provider settings", () => 
   assert.throws(() => buildRunTaskInput(job, { TRANSCODE_MODE: "gpu", GPU_CLUSTER: "c" }), /GPU_TASK/);
 });
 
-test("cpu mode (default) is the unchanged Fargate request", () => {
+test("cpu mode (default) is the Fargate request, now without injected keys", () => {
   const input = buildRunTaskInput(job, cpuEnv);
   assert.equal(input.launchType, "FARGATE");
   assert.equal(input.cluster, "old");
   assert.deepEqual(input.networkConfiguration.awsvpcConfiguration.subnets, ["s1", "s2"]);
   assert.equal(input.capacityProviderStrategy, undefined);
   assert.equal(envOf(input).TRANSCODE_MODE, "cpu");
+  assert.equal(envOf(input).AWS_ACCESS_KEY_ID, undefined, "static keys must not be shipped to the container");
+  assert.equal(envOf(input).AWS_SECRET_ACCESS_KEY, undefined);
 });
 
 test("cpu mode still validates Fargate networking", () => {

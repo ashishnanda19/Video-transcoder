@@ -3,5 +3,6 @@ region               = "ap-south-1"
 asg_max_size         = 2
 alarm_email          = "you@example.com"
 billing_alarm_usd    = 50
-# server_iam_user_name = "video-transcoder-server"
+lambda_api_endpoint  = "https://<your-render-app>.onrender.com/api/v1/video/s3-trigger"
+cors_allowed_origins = ["https://video-transcoder-five.vercel.app", "http://localhost:3000"]
 # subnet_ids         = ["subnet-aaa", "subnet-bbb"]   # public subnets; default = default VPC

@@ -13,3 +13,18 @@ resource "aws_security_group" "gpu_instances" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
+# Fargate (CPU rollback path) tasks: outbound only, public IP assigned by RunTask.
+resource "aws_security_group" "fargate" {
+  name        = "${var.name_prefix}-cpu-tasks"
+  description = "VidFlow Fargate CPU tasks: no inbound, all outbound"
+  vpc_id      = data.aws_subnet.first.vpc_id
+
+  egress {
+    description = "S3, ECR, CloudWatch, webhook"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}

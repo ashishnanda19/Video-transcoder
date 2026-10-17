@@ -60,10 +60,7 @@ function buildRunTaskInput(job, env = process.env) {
   if (!subnets.length || !env.ECS_SECURITY_GROUP) {
     throw new Error("ECS_SUBNETS and ECS_SECURITY_GROUP environment variables must be set.");
   }
-  environment.push(
-    { name: "AWS_ACCESS_KEY_ID", value: env.AWS_ACCESS_KEY_ID || env.MY_AWS_ACCESS_KEY_ID },
-    { name: "AWS_SECRET_ACCESS_KEY", value: env.AWS_SECRET_ACCESS_KEY || env.MY_AWS_SECRET_ACCESS_KEY }
-  );
+  // No AWS keys injected any more: the Fargate task definition carries the same S3 task role as the GPU one.
   return {
     cluster: env.CLUSTER,
     taskDefinition: env.TASK,

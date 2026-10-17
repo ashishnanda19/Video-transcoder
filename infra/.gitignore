@@ -3,3 +3,4 @@
 *.tfstate.*
 terraform.tfvars
 crash.log
+.build/

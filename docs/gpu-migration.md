@@ -23,7 +23,7 @@ Note: the Lambda only forwards the S3 event; **`RunTask` lives in the Express se
 | CPU image (unchanged, rollback target) | `ecs-task/Dockerfile` |
 | ffmpeg command builder, GPU probe, CPU fallback, ladder/env config | `ecs-task/utils/{ffmpegCommand,transcode,gpuProbe,probe,transcodeConfig}.js` |
 | Benchmark + VMAF/SSIM | `ecs-task/benchmark/` |
-| Terraform: cluster, ASG (min 0), capacity provider, task def, IAM, SG, alarms, ECR | `infra/` |
+| Terraform for the **whole AWS stack** in one account: S3 buckets (CORS, lifecycle), upload-trigger Lambda + S3 notification, server IAM user, GPU cluster / ASG (min 0) / capacity provider / task def, Fargate CPU cluster + task def, ECR ×2, IAM, SGs, alarms | `infra/` |
 | `RunTask` via capacity provider, `failures` handling, statuses | `server/src/utils/{ecsTranscodingTrigger,runTaskInput}.js` |
 | Limiter / dispatcher (atomic Redis slots) | `server/src/jobs/`, `server/src/db/redis.js` |
 
@@ -47,31 +47,35 @@ aws service-quotas request-service-quota-increase --service-code ec2 \
 Approval can take hours to days. Also confirm `g4dn.xlarge` is offered in your AZs:
 `aws ec2 describe-instance-type-offerings --location-type availability-zone --filters Name=instance-type,Values=g4dn.xlarge --region ap-south-1`.
 
-## Deploy
+## Deploy (everything in one AWS account)
 
-Prereqs: AWS CLI configured (profile/SSO; no keys in the repo), Terraform ≥ 1.5, Docker with buildx.
+`infra/` creates the complete AWS side, so the account you are logged into is the only one involved: both S3 buckets, the S3 → Lambda trigger,
+the server's IAM user, the GPU stack and the Fargate CPU rollback stack. Only MongoDB, Redis, the Express server (Render) and the frontend (Vercel) live outside AWS.
+
+Prereqs: AWS CLI on the right account (`aws sts get-caller-identity`), Terraform ≥ 1.5, Node/npm (the Lambda bundle is built during apply), Docker with buildx.
 
 ```bash
-# 1. Infrastructure
+# 1. Infrastructure. Set lambda_api_endpoint to <your Render URL>/api/v1/video/s3-trigger
 cd infra
-cp terraform.tfvars.example terraform.tfvars      # set alarm_email, optionally server_iam_user_name
-terraform init
-terraform plan                                     # read it: expect ~30 resources, no changes to existing infra
+cp terraform.tfvars.example terraform.tfvars      # edit: lambda_api_endpoint, alarm_email, cors_allowed_origins
+terraform init -upgrade                            # new providers were added (archive)
+terraform plan                                     # read it
 terraform apply
 
-# 2. Build + push the GPU image (must be linux/amd64, even on Apple Silicon; the ffmpeg compile takes a while under emulation)
-REPO=$(terraform output -raw ecr_repository_url)
-aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin "${REPO%%/*}"
+# 2. Build + push the GPU image (linux/amd64 even on Apple Silicon; the ffmpeg compile is slow under emulation)
+ACCT=$(aws sts get-caller-identity --query Account --output text); REG=$ACCT.dkr.ecr.ap-south-1.amazonaws.com
+aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $REG
 cd ../ecs-task
-docker buildx build --platform linux/amd64 -f Dockerfile.gpu -t "$REPO:gpu" --push .
+docker buildx build --platform linux/amd64 -f Dockerfile.gpu -t "$(terraform -chdir=../infra output -raw ecr_repository_url):gpu" --push .
 
-# 3. Let the server launch GPU tasks: attach the policy to the IAM user whose keys Render holds
-#    (skip if you set server_iam_user_name)
-aws iam attach-user-policy --user-name <server-iam-user> \
-  --policy-arn "$(terraform -chdir=../infra output -raw server_runtask_policy_arn)"
+# 3. Build + push the CPU image (the Fargate rollback target)
+docker buildx build --platform linux/amd64 -f Dockerfile -t "$(terraform -chdir=../infra output -raw cpu_ecr_repository_url):cpu" --push .
 
-# 4. Smoke-test the GPU path without a real job (also measures cold start; see below).
-#    Runs only the self-check (the entrypoint) and exits.
+# 4. Credentials for the server (Render). The secret is shown once and never enters Terraform state.
+aws iam create-access-key --user-name "$(terraform -chdir=../infra output -raw server_iam_user)"
+#    -> set MY_AWS_ACCESS_KEY_ID / MY_AWS_SECRET_ACCESS_KEY on Render
+
+# 5. Smoke-test the GPU path without a real job (also measures cold start; see below). Runs only the self-check and exits.
 cd ../infra
 aws ecs run-task --region ap-south-1 --cluster "$(terraform output -raw cluster_name)" \
   --task-definition "$(terraform output -raw task_definition_family)" \
@@ -79,13 +83,17 @@ aws ecs run-task --region ap-south-1 --cluster "$(terraform output -raw cluster_
   --overrides '{"containerOverrides":[{"name":"video-transcoder","command":["true"]}]}'
 # then read the self-check in CloudWatch Logs group $(terraform output -raw log_group): look for "RESULT: GPU OK"
 
-# 5. Point the server at it (Render env vars), then redeploy the server:
-#    TRANSCODE_MODE=gpu
-#    GPU_CLUSTER=<output cluster_name>   GPU_TASK=<output task_definition_family>   GPU_CAPACITY_PROVIDER=<output capacity_provider_name>
-#    GPU_ASG_MAX_SIZE=<same as asg_max_size>        (MAX_CONCURRENT_JOBS optional, see below)
+# 6. Render env vars: print them all with
+terraform output server_env
+#    (plus MY_AWS_ACCESS_KEY_ID / MY_AWS_SECRET_ACCESS_KEY from step 4, and your existing MONGO_URI, REDIS_URL, WEBHOOK_URL, ...)
 ```
 
-The new Mongo status `starting` needs no migration (Mongoose enum only).
+Start with `TRANSCODE_MODE=cpu` on Render if you want to validate the upload → Lambda → Fargate → webhook chain first, then switch to `gpu`.
+The `lambda_api_endpoint` must be reachable from AWS; the Lambda times out after 60s to survive a sleeping Render instance.
+If you change only the Lambda source, `terraform apply` rebuilds the bundle (hash-triggered). If `.build/` was deleted, run `terraform apply -replace=terraform_data.lambda_build`.
+
+The new Mongo status `starting` needs no migration (Mongoose enum only). The old `upload-trigger-api` Serverless deploy and the loose `*.json` policy files are superseded by Terraform.
+The Next.js `api/upload` and `api/videos` routes in the client sign with their own `AWS_ACCESS_KEY_ID`; the app's server-side signing path (`/get-upload-url`) is what Terraform's IAM policy covers. If you still use those routes, give them the same user's key.
 
 ## Tear down
 
@@ -99,7 +107,7 @@ aws ec2 describe-instances --region ap-south-1 --filters Name=instance-state-nam
   Name=tag:AmazonECSManaged,Values=true --query 'Reservations[].Instances[].InstanceId'
 ```
 
-`terraform destroy` removes the ASG (`force_delete`), capacity provider, cluster, ECR repo (with images), roles and alarms. It never touches your buckets, the Fargate cluster, Lambda or Mongo/Redis.
+`terraform destroy` removes everything it created: the ASG (`force_delete`), clusters, Lambda, ECR repos (with images), roles, the IAM user, alarms and the **temp bucket**. The **final bucket is kept safe**: destroy fails if it still holds transcoded videos unless you set `final_bucket_force_destroy = true` (or empty it first). Access keys you created with the CLI must be deleted first (`aws iam delete-access-key`) or the user cannot be removed. MongoDB, Redis, Render and Vercel are not touched.
 If the capacity provider refuses to delete ("in use"), set the ASG desired capacity to 0 and retry.
 A billing alarm in us-east-1 and the SNS topics are removed too; the email subscription confirmations will simply stop.
 
@@ -213,11 +221,11 @@ aws budgets create-budget --account-id <ACCOUNT_ID> \
 
 ## Rolling back to CPU
 
-1. On the server (Render) set `TRANSCODE_MODE=cpu` and restart. New jobs use the original Fargate cluster/task (`CLUSTER`, `TASK`, `ECS_SUBNETS`, `ECS_SECURITY_GROUP`) exactly as before; the limiter returns to its default of 5 (or `MAX_CONCURRENT_JOBS`).
+1. On the server (Render) set `TRANSCODE_MODE=cpu` and restart. New jobs use the Fargate cluster/task Terraform created (`CLUSTER`, `TASK`, `ECS_SUBNETS`, `ECS_SECURITY_GROUP` from `terraform output server_env`; needs the CPU image pushed in step 3); the limiter returns to its default of 5 (or `MAX_CONCURRENT_JOBS`).
 2. Let in-flight GPU jobs finish (the ASG then scales itself to 0), or `terraform destroy` once idle.
 3. Within the GPU container, `TRANSCODE_MODE=cpu` (task-definition env) runs libx264 on the GPU box. Pointless cost-wise, but useful for A/B tests; `GPU_FALLBACK_TO_CPU=false` makes GPU problems fail loudly instead.
 
-The old CPU image keeps working with the old code. If you rebuild it from `ecs-task/` you pick up the new worker (default mode `cpu`, aspect-correct scaling, `processing` webhook, default AWS credential chain, which still honours the env keys the Fargate path injects).
+The CPU image is built from the same `ecs-task/` code (default mode `cpu`, aspect-correct scaling, `processing` webhook). The Fargate task gets S3 access from the shared task role, so the server no longer injects static AWS keys into containers.
 
 ## Known limits / not verified from a laptop
 

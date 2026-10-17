@@ -76,16 +76,24 @@ resource "aws_iam_role_policy" "task_s3" {
   policy = data.aws_iam_policy_document.task_s3.json
 }
 
-# --- What the Express server's IAM user needs to launch GPU tasks (no static creds are created here)
-data "aws_iam_policy_document" "server_runtask" {
+# --- The Express server (runs on Render, outside AWS): a dedicated IAM user. Its access key is created with the
+# CLI (see docs/gpu-migration.md) so the secret is never stored in Terraform state.
+resource "aws_iam_user" "server" {
+  name = var.server_iam_user_name
+}
+
+data "aws_iam_policy_document" "server" {
   statement {
-    sid       = "RunGpuTask"
-    actions   = ["ecs:RunTask"]
-    resources = ["arn:aws:ecs:${var.region}:${local.account_id}:task-definition/${aws_ecs_task_definition.transcoder.family}:*"]
+    sid     = "RunTranscodeTasks"
+    actions = ["ecs:RunTask"]
+    resources = [
+      "arn:aws:ecs:${var.region}:${local.account_id}:task-definition/${aws_ecs_task_definition.transcoder.family}:*",
+      "arn:aws:ecs:${var.region}:${local.account_id}:task-definition/${aws_ecs_task_definition.transcoder_cpu.family}:*",
+    ]
     condition {
       test     = "ArnEquals"
       variable = "ecs:cluster"
-      values   = [aws_ecs_cluster.gpu.arn]
+      values   = [aws_ecs_cluster.gpu.arn, aws_ecs_cluster.cpu.arn]
     }
   }
   statement {
@@ -98,15 +106,25 @@ data "aws_iam_policy_document" "server_runtask" {
       values   = ["ecs-tasks.amazonaws.com"]
     }
   }
+  # Presigned PUT (upload) and delete of the temp object once transcoded; presigned GET of the outputs.
+  statement {
+    sid       = "TempBucket"
+    actions   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+    resources = ["${aws_s3_bucket.temp.arn}/*"]
+  }
+  statement {
+    sid       = "FinalBucketRead"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.final.arn}/*"]
+  }
 }
 
-resource "aws_iam_policy" "server_runtask" {
-  name   = "${local.cluster}-server-runtask"
-  policy = data.aws_iam_policy_document.server_runtask.json
+resource "aws_iam_policy" "server" {
+  name   = "${var.name_prefix}-server"
+  policy = data.aws_iam_policy_document.server.json
 }
 
 resource "aws_iam_user_policy_attachment" "server" {
-  count      = var.server_iam_user_name == "" ? 0 : 1
-  user       = var.server_iam_user_name
-  policy_arn = aws_iam_policy.server_runtask.arn
+  user       = aws_iam_user.server.name
+  policy_arn = aws_iam_policy.server.arn
 }

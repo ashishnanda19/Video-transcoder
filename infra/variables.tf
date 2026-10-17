@@ -97,6 +97,42 @@ variable "instance_running_alarm_hours" {
 
 variable "server_iam_user_name" {
   type        = string
-  default     = ""
-  description = "Existing IAM user whose keys the Express server uses. If set, the RunTask policy is attached to it; otherwise attach the output policy yourself."
+  default     = "vidflow-server"
+  description = "IAM user created for the Express server (Render). Create its access key with the CLI so the secret never enters Terraform state."
+}
+
+variable "cors_allowed_origins" {
+  type        = list(string)
+  default     = ["https://video-transcoder-five.vercel.app", "http://localhost:3000"]
+  description = "Browser origins allowed to PUT uploads / GET videos via presigned URLs."
+}
+
+variable "lambda_api_endpoint" {
+  type        = string
+  default     = "https://video-transcoder-server-vvep.onrender.com/api/v1/video/s3-trigger"
+  description = "Full URL of the server's S3 trigger endpoint (<render-url>/api/v1/video/s3-trigger). The default is derived from the host hardcoded in the server; change it to your real Render URL."
+}
+
+variable "temp_upload_expiry_days" {
+  type        = number
+  default     = 2
+  description = "Safety net: uploads left in the temp bucket (failed jobs) are deleted after this many days."
+}
+
+variable "final_bucket_force_destroy" {
+  type        = bool
+  default     = false
+  description = "true lets `terraform destroy` delete the final bucket even if it still contains transcoded videos."
+}
+
+variable "cpu_task_cpu" {
+  type        = number
+  default     = 4096
+  description = "Fargate vCPU units for the CPU rollback path (4 parallel libx264 processes)."
+}
+
+variable "cpu_task_memory" {
+  type        = number
+  default     = 8192
+  description = "Fargate memory (MiB) for the CPU rollback path. Must be a valid pair with cpu_task_cpu."
 }
