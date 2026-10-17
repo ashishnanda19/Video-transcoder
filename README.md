@@ -32,7 +32,7 @@ A walkthrough of the app: sign in with Google, upload a video, watch it move thr
 
 ## Architecture
 
-![Video Transcoder Service System Design](./assets/video-transcoder-system-design-cuda.png)
+![Video Transcoder Service System Design](./assets/vidflow-system-design.png)
 
 The original diagram (without the CUDA stage) is still available at [assets/video-transcoder-system-design.png](./assets/video-transcoder-system-design.png).
 
