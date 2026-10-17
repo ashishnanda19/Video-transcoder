@@ -2,6 +2,7 @@ const { asyncHandler } = require("../utils/asyncHandler.js");
 
 
 const { enqueueJobInQueue } = require("../db/redis.js");
+const { decodeS3EventKey } = require("../utils/s3Key.js");
 
 const { VIDEO_PROCESS_STATES } = require("../constants.js");
 
@@ -39,8 +40,19 @@ const handleS3Trigger = asyncHandler(async (req, res) => {
    }
    */
 
-  const key = s3EventData.object.key;
+  // Event keys are URL-encoded ('+' for spaces); the real object key is the decoded one.
+  const key = decodeS3EventKey(s3EventData.object.key);
   const fileName = key.split("/").pop().split(".")[0];
+
+  // S3 delivers events at least once, and a double-click uploads twice. Don't start a second job (and a second
+  // worker writing the same outputs) for an object that is already queued or running.
+  const inFlight = await Video.findOne({
+    objectKey: key,
+    progress: { $in: [VIDEO_PROCESS_STATES.PENDING, VIDEO_PROCESS_STATES.QUEUED, VIDEO_PROCESS_STATES.STARTING, VIDEO_PROCESS_STATES.PROCESSING] },
+  });
+  if (inFlight) {
+    return res.status(200).json({ message: "Already in progress for " + fileName });
+  }
 
   const video = await Video.create({
     fileName: fileName,
