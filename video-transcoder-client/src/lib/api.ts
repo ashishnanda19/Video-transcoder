@@ -35,7 +35,7 @@ api.interceptors.response.use(
   (error) => {
     const url: string = error?.config?.url ?? "";
     if (typeof window !== "undefined" && error?.response?.status === 401 && !url.includes("current-user")) {
-      window.location.assign("/signin/?error=expired");
+      window.location.assign("/signin?error=expired");
     }
     return Promise.reject(error);
   }

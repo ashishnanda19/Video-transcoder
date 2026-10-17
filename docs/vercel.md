@@ -60,8 +60,8 @@ In https://console.cloud.google.com → your project:
    - Authorized redirect URIs: `https://vidflow.vercel.app/api/v1/user/google/callback`
 2. **OAuth consent screen → Branding** (called *App information / App domain* in older consoles):
    - Application home page: `https://vidflow.vercel.app`
-   - Privacy policy: `https://vidflow.vercel.app/privacy/`
-   - Terms of service: `https://vidflow.vercel.app/terms/`
+   - Privacy policy: `https://vidflow.vercel.app/privacy`
+   - Terms of service: `https://vidflow.vercel.app/terms`
    - **Authorized domains**: `vidflow.vercel.app`. Google asks you to prove you own it: open https://search.google.com/search-console, add a *URL prefix* property for your Vercel URL, choose the **HTML file** method, download the file, put it in `video-transcoder-client/public/`, run `npx vercel --prod` again, then click Verify.
 3. **Audience → Publish app → In production.** VidFlow only asks for the basic profile (`openid`, `email`, `profile`), which Google treats as non-sensitive, so no Google review is needed and the "100 test users" limit goes away.
 

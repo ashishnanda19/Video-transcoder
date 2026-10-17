@@ -41,7 +41,7 @@ const json = (body) => ({ method: "POST", headers: { "Content-Type": "applicatio
     const a = await get(asset);
     ok(a.status === 200 && /immutable/.test(a.headers.get("cache-control") || ""), "hashed assets are cached for a year", a.headers.get("cache-control") || "none");
   }
-  for (const legal of ["/privacy/", "/terms/"]) {
+  for (const legal of ["/privacy", "/terms"]) {
     const r = await get(legal);
     ok(r.status === 200, `${legal} page is served (Google requires a privacy policy and terms)`, `HTTP ${r.status}`);
   }

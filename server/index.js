@@ -122,9 +122,18 @@ async function main() {
   const publicDir = path.join(__dirname, "public");
   const hasUi = fs.existsSync(path.join(publicDir, "index.html"));
   if (hasUi) {
+    // /upload/ -> /upload, the one canonical form (the API itself is unaffected)
+    app.use((req, res, next) => {
+      if (req.method === "GET" && req.path.length > 1 && req.path.endsWith("/") && !req.path.startsWith("/api/")) {
+        const qs = req.url.slice(req.path.length);
+        return res.redirect(308, req.path.replace(/\/+$/, "") + qs);
+      }
+      return next();
+    });
     app.use(
       express.static(publicDir, {
-        index: "index.html", // /upload/ -> /upload/index.html (a bare /upload is redirected to /upload/)
+        extensions: ["html"], // /upload -> upload.html (the UI is exported without trailing slashes)
+        index: "index.html",
         setHeaders: (res, file) => {
           res.setHeader(
             "Cache-Control",

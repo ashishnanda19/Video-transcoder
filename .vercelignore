@@ -1,0 +1,16 @@
+# Only video-transcoder-client is built on Vercel (the project's Root Directory). Keep everything else out of the upload.
+AWSCLIV2.pkg
+*.pkg
+*.zip
+*.tfstate*
+.terraform
+infra
+docs
+assets
+server
+ecs-task
+upload-trigger-api
+scripts
+Dockerfile.api
+.dockerignore
+render.yaml
