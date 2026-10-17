@@ -8,7 +8,9 @@ This project implements a distributed video transcoding system with a leaky buck
 
 ## Project Demo
 
-[![Watch the video](https://img.youtube.com/vi/i0EtH3EJCYY/0.jpg)](https://youtu.be/MarP77Ef6yE)
+[![Watch the VidFlow walkthrough](./assets/vidflow-demo-poster.jpg)](./assets/vidflow-demo.mp4)
+
+A walkthrough of the app: sign in with Google, upload a video, watch it move through the pipeline, then preview and download every resolution (1:40).
 
 
 
