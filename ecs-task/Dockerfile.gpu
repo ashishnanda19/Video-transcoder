@@ -1,0 +1,91 @@
+# syntax=docker/dockerfile:1
+#
+# GPU image: ffmpeg built from source with NVDEC/CUDA/NPP/NVENC (+ libx264 for the CPU fallback).
+# The CPU image (./Dockerfile, alpine) is unchanged and remains the rollback target.
+#
+# Build for the GPU instance's architecture (x86_64) -- on Apple Silicon you MUST pass the platform:
+#   docker buildx build --platform linux/amd64 -f Dockerfile.gpu -t video-transcoder:gpu .
+#
+# At runtime the NVIDIA container toolkit (preinstalled on the ECS GPU-optimized AMI) injects
+# libcuda / libnvcuvid / libnvidia-encode from the host driver; they are NOT in this image.
+
+ARG CUDA_VERSION=12.2.2
+ARG CUDA_APT_VERSION=12-2
+ARG FFMPEG_VERSION=6.1.1
+# n12.1.14.0 needs NVIDIA driver >= 530.41.03; newer headers demand newer drivers. Bump deliberately.
+ARG NV_CODEC_HEADERS_VERSION=n12.1.14.0
+# T4 = Turing = sm_75. CUDA 12 dropped ffmpeg's default (compute_30), so nvccflags MUST be set.
+ARG CUDA_ARCH=75
+
+# ---------------------------------------------------------------- ffmpeg build
+FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04 AS ffmpeg-build
+ARG FFMPEG_VERSION
+ARG NV_CODEC_HEADERS_VERSION
+ARG CUDA_ARCH
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential pkg-config yasm nasm git ca-certificates curl xz-utils \
+      libx264-dev libvmaf-dev libnuma-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 --branch ${NV_CODEC_HEADERS_VERSION} \
+      https://git.videolan.org/git/ffmpeg/nv-codec-headers.git /src/nv-codec-headers \
+    && make -C /src/nv-codec-headers install
+
+RUN curl -fsSL https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz | tar -xJ -C /src
+
+# --enable-nonfree is required for libnpp / cuda-nvcc: the resulting binary is NOT redistributable.
+# Fine for running on your own infrastructure; do not publish this image publicly.
+RUN cd /src/ffmpeg-${FFMPEG_VERSION} && ./configure \
+      --prefix=/opt/ffmpeg \
+      --enable-gpl --enable-nonfree \
+      --enable-libx264 --enable-libvmaf \
+      --enable-cuda-nvcc --enable-libnpp --enable-nvenc --enable-nvdec \
+      --extra-cflags=-I/usr/local/cuda/include \
+      --extra-ldflags=-L/usr/local/cuda/lib64 \
+      --nvccflags="-gencode arch=compute_${CUDA_ARCH},code=sm_${CUDA_ARCH} -O2" \
+      --disable-doc --disable-debug \
+    && make -j"$(nproc)" && make install
+
+# ---------------------------------------------------------------- node deps
+FROM node:20-bookworm-slim AS node-deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+# ---------------------------------------------------------------- runtime
+FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu22.04
+ARG CUDA_APT_VERSION
+
+# video = NVENC/NVDEC libs, compute = CUDA, utility = nvidia-smi. Without `video`, h264_nvenc cannot load.
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \
+    TRANSCODE_MODE=gpu \
+    PATH=/opt/ffmpeg/bin:$PATH \
+    LD_LIBRARY_PATH=/opt/ffmpeg/lib:$LD_LIBRARY_PATH \
+    DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates libx264-163 libvmaf1 libnuma1 libgomp1 libnpp-${CUDA_APT_VERSION} \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ffmpeg-build /opt/ffmpeg /opt/ffmpeg
+COPY --from=node-deps /usr/local/bin/node /usr/local/bin/node
+
+# Fail the build (not the first production job) if ffmpeg links against a library we did not ship.
+# libcuda / libnvcuvid / libnvidia-encode come from the host driver at runtime and are dlopen()ed.
+RUN missing="$(ldd /opt/ffmpeg/bin/ffmpeg | grep 'not found' | grep -Ev 'libcuda\.so|libnvcuvid|libnvidia-encode' || true)"; \
+    if [ -n "$missing" ]; then echo "Missing shared libraries:"; echo "$missing"; exit 1; fi; \
+    ffmpeg -hide_banner -encoders | grep -q h264_nvenc && ffmpeg -hide_banner -filters | grep -q scale_cuda
+
+WORKDIR /app
+COPY --from=node-deps /app/node_modules node_modules
+COPY package.json .
+COPY utils/ utils/
+COPY scripts/ scripts/
+COPY index.js .
+RUN chmod +x scripts/*.sh
+
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
+CMD ["node", "index.js"]
