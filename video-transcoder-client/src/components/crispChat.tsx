@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect } from "react";
-import { Crisp } from "crisp-sdk-web";
 
+// Optional support chat. It is only built in when NEXT_PUBLIC_CRISP_WEBSITE_ID is set at build time (and the server is
+// then run with CSP_ALLOW_CRISP=true), so a default deployment loads no third-party scripts.
 export const CrispChat = () => {
+  const websiteId = process.env.NEXT_PUBLIC_CRISP_WEBSITE_ID;
+
   useEffect(() => {
-    Crisp.configure("ff6b5e15-6f49-40ef-ae0c-581f1ab09f80");
-  }, []);
+    if (!websiteId) return;
+    import("crisp-sdk-web").then(({ Crisp }) => Crisp.configure(websiteId));
+  }, [websiteId]);
 
   return null;
 };

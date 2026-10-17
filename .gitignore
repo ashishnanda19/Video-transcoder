@@ -1,0 +1,6 @@
+.vercel
+.env*
+
+# large local artifacts
+*.pkg
+*.zip

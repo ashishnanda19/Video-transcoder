@@ -1,0 +1,201 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<!-- Source of the landing page's hero video. It is a pure function of time (render(t)), so frames can be captured
+     deterministically: scripts/render-hero.mjs steps t from 0 to LOOP and encodes public/hero-loop.mp4. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" />
+<style>
+  :root { --violet:#6d4aff; --blue:#3b82f6; --cyan:#22d3ee; --ink:#12121a; --muted:#6b6b80; --green:#16a34a; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1280px; height: 720px; overflow: hidden; background: #f6f6fb; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
+  #stage { position: relative; width: 1280px; height: 720px; overflow: hidden; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(70px); }
+  #grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(18,18,26,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(18,18,26,.045) 1px, transparent 1px); background-size: 48px 48px; -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 45%, #000 20%, transparent 100%); }
+  .abs { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .card { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 18px; background: #fff; box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 18px 44px -14px rgba(60,40,160,.35), 0 0 0 1px rgba(30,30,60,.08); overflow: hidden; }
+  .vid { position: absolute; inset: 0; overflow: hidden; }
+  .vid .sky { position: absolute; inset: 0; }
+  .vid .sun { position: absolute; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff7d6, #ffb86b 60%, #ff8a5c); }
+  .vid .hill { position: absolute; left: -10%; width: 120%; border-radius: 50%; }
+  .tag { position: absolute; font-weight: 700; font-size: 15px; letter-spacing: .01em; padding: 5px 11px; border-radius: 999px; background: rgba(255,255,255,.92); color: var(--ink); box-shadow: 0 0 0 1px rgba(30,30,60,.1); font-family: "JetBrains Mono", monospace; }
+  .play { position: absolute; width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,.94); box-shadow: 0 8px 24px rgba(0,0,0,.25); display:flex; align-items:center; justify-content:center; }
+  .play::after { content: ""; margin-left: 5px; border-left: 20px solid #12121a; border-top: 12px solid transparent; border-bottom: 12px solid transparent; }
+  .bar { position: absolute; height: 8px; border-radius: 99px; background: rgba(30,30,60,.1); overflow: hidden; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: linear-gradient(90deg, var(--violet), var(--blue), var(--cyan)); }
+  .label { position: absolute; font-weight: 600; white-space: nowrap; }
+  .mono { font-family: "JetBrains Mono", monospace; }
+  .pill { position: absolute; left: 0; top: 0; padding: 9px 18px; border-radius: 999px; font-weight: 600; font-size: 17px; background: #fff; color: var(--muted); box-shadow: 0 0 0 1px rgba(30,30,60,.1); display:flex; gap:9px; align-items:center; white-space: nowrap; }
+  .pill b { width: 22px; height: 22px; border-radius: 50%; display:flex; align-items:center; justify-content:center; font-size: 12px; background: rgba(30,30,60,.1); color: var(--muted); }
+  .check { position: absolute; width: 30px; height: 30px; border-radius: 50%; background: var(--green); display:flex; align-items:center; justify-content:center; box-shadow: 0 6px 16px rgba(22,163,74,.45); }
+  .check svg { width: 17px; height: 17px; }
+  .spark { position: absolute; width: 8px; height: 8px; border-radius: 50%; }
+  svg.lines { position:absolute; inset:0; overflow: visible; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="blob" id="b1" style="width:620px;height:620px;background:rgba(109,74,255,.30);"></div>
+  <div class="blob" id="b2" style="width:560px;height:560px;background:rgba(34,211,238,.28);"></div>
+  <div class="blob" id="b3" style="width:420px;height:420px;background:rgba(236,72,153,.16);"></div>
+  <div id="grid"></div>
+  <svg class="lines" id="lines" width="1280" height="720"></svg>
+  <div id="steps"></div>
+  <div id="cards"></div>
+  <div id="fx"></div>
+</div>
+<script>
+const LOOP = 8; // seconds; render(0) and render(LOOP) are identical (everything is faded out)
+const W = 1280, H = 720;
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+const easeInOut = (x) => (x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const easeBack = (x) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const lerp = (a, b, x) => a + (b - a) * x;
+const el = (html) => { const d = document.createElement("div"); d.innerHTML = html.trim(); return d.firstElementChild; };
+
+// --- the "video" painted inside every card: a looping sunset scene whose phase depends on t
+function sceneHTML() {
+  return `<div class="vid"><div class="sky"></div><div class="sun"></div><div class="hill h1"></div><div class="hill h2"></div></div>`;
+}
+function paintScene(card, t, hue) {
+  const v = card.querySelector(".vid"); const w = v.clientWidth, h = v.clientHeight;
+  const p = (t / LOOP) * TAU;
+  const sky = card.querySelector(".sky");
+  sky.style.background = `linear-gradient(${180 + Math.sin(p) * 8}deg, hsl(${230 + hue + Math.sin(p) * 14},80%,62%), hsl(${290 + hue + Math.cos(p) * 20},85%,72%) 55%, hsl(${22 + hue * .3},95%,76%))`;
+  const sun = card.querySelector(".sun"); const sd = h * .34;
+  sun.style.width = sun.style.height = sd + "px";
+  sun.style.left = (w * (.5 + .28 * Math.sin(p)) - sd / 2) + "px";
+  sun.style.top = (h * (.42 + .1 * Math.cos(p)) - sd / 2) + "px";
+  const h1 = card.querySelector(".h1"), h2 = card.querySelector(".h2");
+  h1.style.top = (h * .66) + "px"; h1.style.height = h * .8 + "px"; h1.style.background = `hsl(${255 + hue * .5},55%,34%)`; h1.style.transform = `translateX(${Math.sin(p) * 18}px)`;
+  h2.style.top = (h * .78) + "px"; h2.style.height = h * .8 + "px"; h2.style.background = `hsl(${250 + hue * .5},60%,22%)`; h2.style.transform = `translateX(${-Math.sin(p) * 26}px)`;
+}
+
+// --- build the cast
+const cards = document.getElementById("cards");
+const stage = document.getElementById("stage");
+const src = el(`<div class="card" id="src">${sceneHTML()}<div class="play"></div></div>`);
+cards.appendChild(src);
+const srcTag = el(`<div class="tag mono" id="srcTag">holiday-trip.mp4 · 28.4 MB</div>`); stage.appendChild(srcTag);
+const srcBar = el(`<div class="bar" id="srcBar"><i></i></div>`); stage.appendChild(srcBar);
+const srcPct = el(`<div class="label mono" id="srcPct" style="font-size:16px;color:#6b6b80">Uploading… 0%</div>`); stage.appendChild(srcPct);
+
+const RUNGS = [
+  { name: "1080p", w: 300, h: 169, size: "4.9 MB", dur: 2.6, hue: 0 },
+  { name: "720p", w: 236, h: 133, size: "3.5 MB", dur: 2.1, hue: 30 },
+  { name: "480p", w: 180, h: 101, size: "1.0 MB", dur: 1.6, hue: 60 },
+  { name: "360p", w: 136, h: 77, size: "0.6 MB", dur: 1.2, hue: 90 },
+];
+const GAP = 44; const totalW = RUNGS.reduce((s, r) => s + r.w, 0) + GAP * 3; let x0 = (W - totalW) / 2;
+RUNGS.forEach((r, i) => {
+  r.x = x0; x0 += r.w + GAP; r.y = 462 + (169 - r.h);
+  r.card = el(`<div class="card">${sceneHTML()}<div class="play" style="transform:scale(.55);left:50%;top:50%;margin:-32px 0 0 -32px"></div></div>`);
+  cards.appendChild(r.card);
+  r.tag = el(`<div class="tag">${r.name}</div>`); stage.appendChild(r.tag);
+  r.bar = el(`<div class="bar"><i></i></div>`); stage.appendChild(r.bar);
+  r.size_ = el(`<div class="label mono" style="font-size:15px;color:#6b6b80">${r.size}</div>`); stage.appendChild(r.size_);
+  r.check = el(`<div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>`); stage.appendChild(r.check);
+});
+const SRC_BIG = { x: 430, y: 150, w: 420, h: 236 };
+const SRC_TOP = { x: 490, y: 96, w: 300, h: 169 };
+
+const stepsEl = document.getElementById("steps");
+const STEPS = ["Upload", "Transcode", "Ready"];
+const stepPills = STEPS.map((s, i) => { const p = el(`<div class="pill"><b>${i + 1}</b>${s}</div>`); stepsEl.appendChild(p); return p; });
+const lines = document.getElementById("lines");
+const linePaths = RUNGS.map(() => { const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("fill", "none"); p.setAttribute("stroke-width", "2.5"); p.setAttribute("stroke-linecap", "round"); p.setAttribute("stroke", "url(#g)"); lines.appendChild(p); return p; });
+lines.insertAdjacentHTML("afterbegin", `<defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#6d4aff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>`);
+const fx = document.getElementById("fx");
+const sparks = Array.from({ length: 22 }, (_, i) => { const s = el(`<div class="spark" style="background:${["#6d4aff", "#22d3ee", "#ec4899", "#f59e0b", "#16a34a"][i % 5]}"></div>`); fx.appendChild(s); return s; });
+const readyPill = el(`<div class="pill" style="color:#16a34a;background:#ecfdf3;box-shadow:0 0 0 1px rgba(22,163,74,.3)"><b style="background:#16a34a;color:#fff">✓</b>All 4 versions ready · download as ZIP</div>`); stage.appendChild(readyPill);
+
+function place(node, x, y, s = 1, o = 1) { node.style.transform = `translate(${x}px,${y}px) scale(${s})`; node.style.opacity = o; }
+function setBox(card, b, o = 1) { card.style.width = b.w + "px"; card.style.height = b.h + "px"; card.style.transform = `translate(${b.x}px,${b.y}px)`; card.style.opacity = o; }
+
+function render(t) {
+  const p = (t / LOOP) * TAU;
+  // drifting background (periodic, so the loop is seamless)
+  const b1 = document.getElementById("b1"), b2 = document.getElementById("b2"), b3 = document.getElementById("b3");
+  place(b1, 40 + Math.sin(p) * 50, -120 + Math.cos(p) * 40); place(b2, 720 + Math.cos(p) * 60, 300 + Math.sin(p) * 50); place(b3, 380 + Math.sin(p + 1) * 70, 180 + Math.cos(p + 2) * 40);
+
+  const master = easeOut(seg(t, 0, .45)) * (1 - easeInOut(seg(t, 7.35, 8)));   // whole scene fades in/out
+  stage.style.setProperty("--m", master);
+  [srcTag, srcBar, srcPct, readyPill].forEach(n => n.style.opacity = 0);
+
+  // steps pills (top)
+  const stepIdx = t < 1.7 ? 0 : t < 5.4 ? 1 : 2;
+  stepPills.forEach((pill, i) => {
+    const on = i === stepIdx, done = i < stepIdx;
+    const pw = pill.offsetWidth; const cx = W / 2 + (i - 1) * 215 - pw / 2;
+    pill.style.transform = `translate(${cx}px,${34}px) scale(${on ? 1.06 : 1})`;
+    pill.style.opacity = master;
+    pill.style.color = on ? "#12121a" : done ? "#16a34a" : "#6b6b80";
+    pill.style.boxShadow = on ? "0 0 0 2px #6d4aff, 0 10px 24px -8px rgba(109,74,255,.5)" : "0 0 0 1px rgba(30,30,60,.1)";
+    const b = pill.querySelector("b"); b.style.background = on ? "linear-gradient(135deg,#6d4aff,#3b82f6)" : done ? "#16a34a" : "rgba(30,30,60,.1)"; b.style.color = on || done ? "#fff" : "#6b6b80"; b.textContent = done ? "✓" : String(i + 1);
+  });
+
+  // source card: pop in, "upload", then shrink to the top
+  const popIn = easeBack(seg(t, 0.1, .8));
+  const toTop = easeInOut(seg(t, 1.7, 2.5));
+  const box = { x: lerp(SRC_BIG.x, SRC_TOP.x, toTop), y: lerp(SRC_BIG.y, SRC_TOP.y, toTop), w: lerp(SRC_BIG.w, SRC_TOP.w, toTop), h: lerp(SRC_BIG.h, SRC_TOP.h, toTop) };
+  const sc = lerp(.82, 1, popIn);
+  setBox(src, { x: box.x + box.w * (1 - sc) / 2, y: box.y + box.h * (1 - sc) / 2, w: box.w * sc, h: box.h * sc }, master * clamp(popIn * 1.4));
+  paintScene(src, t, 0);
+  src.querySelector(".play").style.opacity = 1 - seg(t, 1.5, 1.9);
+  src.querySelector(".play").style.transform = `scale(${1 - toTop * .4})`;
+  src.querySelector(".play").style.left = (box.w * sc / 2 - 32) + "px"; src.querySelector(".play").style.top = (box.h * sc / 2 - 32) + "px";
+  const upl = easeInOut(seg(t, .7, 1.65));
+  const tagA = master * clamp(popIn);
+  place(srcTag, box.x + 14, box.y + box.h * sc - 40, 1, tagA * (1 - seg(t, 1.7, 2.0)));
+  srcBar.style.width = box.w + "px"; place(srcBar, box.x, box.y + box.h + 22, 1, master * (1 - seg(t, 1.7, 2.0)) * seg(t, .55, .9)); srcBar.firstChild.style.width = (upl * 100) + "%";
+  srcPct.textContent = `Uploading… ${Math.round(upl * 100)}%`; place(srcPct, box.x, box.y + box.h + 42, 1, master * (1 - seg(t, 1.7, 2.0)) * seg(t, .55, .9));
+
+  // renditions: fly out of the source, then encode
+  RUNGS.forEach((r, i) => {
+    const start = 2.2 + i * .16;
+    const fly = easeInOut(seg(t, start, start + .85));
+    const from = { x: box.x, y: box.y, w: box.w, h: box.h };
+    const to = { x: r.x, y: r.y, w: r.w, h: r.h };
+    const float = Math.sin(p * 2 + i) * 4 * seg(t, 4.6, 5.2) * (1 - seg(t, 7.0, 7.4));
+    const cur = { x: lerp(from.x, to.x, fly), y: lerp(from.y, to.y, fly) + float, w: lerp(from.w, to.w, fly), h: lerp(from.h, to.h, fly) };
+    const vis = seg(t, start - .02, start + .12) * master;
+    setBox(r.card, cur, vis); paintScene(r.card, t + i * .9, r.hue);
+    const pl = r.card.querySelector(".play"); pl.style.opacity = 0;
+    // encode progress
+    const t0 = start + .85 + .1; const prog = easeInOut(seg(t, t0, t0 + r.dur));
+    const done = prog >= 1;
+    const arrive = fly >= .999;
+    const meta = clamp((fly - .7) / .3) * master;
+    place(r.tag, cur.x + 10, cur.y + cur.h - 36 + (1 - arrive) * 0, 1, meta);
+    r.bar.style.width = r.w + "px"; place(r.bar, r.x, r.y + r.h + 18, 1, meta * (done ? 0 : 1)); r.bar.firstChild.style.width = (prog * 100) + "%";
+    const sizeIn = easeOut(seg(t, t0 + r.dur, t0 + r.dur + .35));
+    place(r.size_, r.x, r.y + r.h + 14 + (1 - sizeIn) * 8, 1, sizeIn * master);
+    const ck = easeBack(seg(t, t0 + r.dur - .05, t0 + r.dur + .35));
+    place(r.check, r.x + r.w - 20, r.y - 12, ck, clamp(ck) * master);
+    // dimming while encoding, bright when done
+    r.card.style.filter = `saturate(${lerp(.55, 1, done ? 1 : prog)}) brightness(${lerp(.96, 1, prog)})`;
+    // connector from the source to this card
+    const sx = box.x + box.w / 2, sy = box.y + box.h, ex = r.x + r.w / 2, ey = r.y;
+    const d = `M ${sx} ${sy} C ${sx} ${sy + 90}, ${ex} ${ey - 90}, ${ex} ${ey}`;
+    linePaths[i].setAttribute("d", d);
+    const L = 700; linePaths[i].style.strokeDasharray = L; linePaths[i].style.strokeDashoffset = L * (1 - easeOut(seg(t, start + .6, start + 1.3)));
+    linePaths[i].style.opacity = master * (1 - seg(t, t0 + r.dur - .6, t0 + r.dur + .4)) * .85;
+  });
+
+  // ready
+  const rd = easeBack(seg(t, 5.55, 6.05));
+  place(readyPill, W / 2 - readyPill.offsetWidth / 2, 392 + 10 + (1 - clamp(rd)) * 14, lerp(.9, 1, clamp(rd)), clamp(rd) * master * (1 - easeInOut(seg(t, 7.1, 7.5))));
+  sparks.forEach((s, i) => {
+    const a = (i / sparks.length) * TAU + .4, k = seg(t, 5.5 + (i % 4) * .03, 6.5);
+    const r = 40 + (i % 5) * 26 + easeOut(k) * (110 + (i % 3) * 40);
+    place(s, W / 2 + Math.cos(a) * r * 1.5, 402 + Math.sin(a) * r * .55, 1 - k * .6, k > 0 && k < 1 ? (1 - k) * master : 0);
+  });
+}
+window.render = render; window.LOOP = LOOP;
+document.fonts.ready.then(() => { render(5.2); window.__ready = true; });
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# The whole app in one image: the Next.js UI is built to static files and served by the Express API.
+#
+#   docker buildx build --platform linux/amd64 -f Dockerfile.api -t <ecr>/vidflow-api:latest --push .   (from the repo root)
+#
+# Optional support chat:  --build-arg NEXT_PUBLIC_CRISP_WEBSITE_ID=<id>   (and run the server with CSP_ALLOW_CRISP=true)
+
+FROM node:20-alpine AS ui
+WORKDIR /ui
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY video-transcoder-client/package.json video-transcoder-client/package-lock.json ./
+RUN npm ci
+COPY video-transcoder-client/ ./
+ARG NEXT_PUBLIC_CRISP_WEBSITE_ID=""
+ENV NEXT_PUBLIC_CRISP_WEBSITE_ID=$NEXT_PUBLIC_CRISP_WEBSITE_ID
+RUN npm run build
+
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY server/package.json server/package-lock.json ./
+RUN npm ci --omit=dev
+
+FROM node:20-alpine
+ENV NODE_ENV=production PORT=8000
+WORKDIR /app
+COPY --from=deps /app/node_modules node_modules
+COPY server/package.json server/index.js ./
+COPY server/src src
+COPY --from=ui /ui/out public
+RUN addgroup -S app && adduser -S app -G app
+USER app
+EXPOSE 8000
+CMD ["node", "index.js"]

@@ -1,206 +1,116 @@
 const { asyncHandler } = require("../utils/asyncHandler.js");
-
-
-const {
-  getKey,
-  enqueueJobInQueue,
-  deQueueJobFromQueue,
-  increment,
-  decrement,
-  getQueueLength,
-  setKey,
-} = require("../db/redis.js");
-
-const { REDIS_KEYS, VIDEO_PROCESS_STATES } = require("../constants.js");
-
-const { triggerTranscodingJob } = require("../utils/ecsTranscodingTrigger.js");
+const { enqueueJobInQueue } = require("../db/redis.js");
+const { decodeS3EventKey } = require("../utils/s3Key.js");
+const { webhookVideoQuery } = require("../utils/webhookQuery.js");
+const { verifyJobToken } = require("../utils/webhookAuth.js");
+const { VIDEO_PROCESS_STATES } = require("../constants.js");
+const { loadConfig } = require("../config.js");
+const { dispatchAvailable, onJobFinished } = require("../jobs/jobDispatcher.js");
 const Video = require("../models/video.model.js");
-
 const { deleteObjectFile } = require("../utils/s3SignedUrl.js");
 
+const config = loadConfig();
+const RUNGS = ["1080p", "720p", "480p", "360p"];
+
+// The S3 "object created" event (Lambda -> here). The record already exists: it was created, with its owner and a
+// unique key, when the signed upload URL was issued. This only moves it from `pending` to the queue.
 const handleS3Trigger = asyncHandler(async (req, res) => {
-  console.log("Trigger from S3.....");
-
-  const { s3EventData } = req.body;
-
-  if (!s3EventData) {
+  const { s3EventData } = req.body || {};
+  if (!s3EventData || !s3EventData.object || !s3EventData.object.key) {
     return res.status(400).json({ message: "S3 Event Data not found!" });
   }
 
-  console.log("S3 Event Data", s3EventData);
+  // Event keys are URL-encoded ('+' for spaces); the real object key is the decoded one.
+  const key = decodeS3EventKey(s3EventData.object.key);
 
-  /*
-   2024-03-02T11:52:19.234Z	be8e0a39-aeab-4624-bf95-26a6d373cfe6	INFO	Received S3 event with object details: {
-     s3SchemaVersion: '1.0',
-     configurationId: 'upload-trigger-api',
-     bucket: {
-       name: 'video-transcoder-temp',
-       ownerIdentity: { principalId: 'A1GP8KJ6WPNITN' },
-       arn: 'arn:aws:s3:::video-transcoder-temp'
-     },
-     object: {
-       key: 'uploads/videos/VID-20230711-WA0065.mp4',
-       size: 2654509,
-       eTag: 'a8bbec5f232fa3629ee302bc36def510',
-       sequencer: '0065E312F182AD832A'
-     }
-   }
-   */
-
-  const key = s3EventData.object.key;
-  // const key = "uploads/videos/VID-20230711-WA0065.mp4";
-  // await setKey(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT, 0)
-
-  const currentJobCount = parseInt(
-    (await getKey(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT)) || 0
+  // Atomic claim: S3 delivers at least once and Lambda retries, so only the first delivery for a pending record wins.
+  const video = await Video.findOneAndUpdate(
+    { objectKey: key, progress: VIDEO_PROCESS_STATES.PENDING },
+    { $set: { progress: VIDEO_PROCESS_STATES.QUEUED } },
+    { new: true }
   );
+  if (!video) {
+    // Unknown object (not created through the upload API) or already handled: acknowledge so nothing retries forever.
+    return res.status(200).json({ message: "Nothing to do for this object" });
+  }
 
-  console.log("current job count: ", currentJobCount);
-
-  // key = 'uploads/videos/VID-20230711-WA0065.mp4';
-  const fileName = key.split("/").pop().split(".")[0];
-
-  // await connectDB();
-
-  
-
-  const video = await Video.create({
-    fileName: fileName,
-    objectKey: key,
-    progress: VIDEO_PROCESS_STATES.PENDING,
+  await enqueueJobInQueue({
+    videoId: String(video._id), // the container echoes this back so its callback hits THIS record
+    fileName: video.fileName,
+    objectKey: video.objectKey,
+    outputPrefix: video.outputPrefix,
+    progress: VIDEO_PROCESS_STATES.QUEUED,
   });
 
-
-  if (!video) {
-    return res.status(500).json({
-      message: "Failed to create video. Please try again later.",
-    });
+  try {
+    await dispatchAvailable();
+  } catch (error) {
+    // The job is safely queued; the poll loop will retry.
+    console.error("Dispatch after enqueue failed:", error);
   }
 
-  if (currentJobCount <= 5) {
-    await increment(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT);
-
-    const job = {
-      fileName,
-      objectKey: key,
-      progress: VIDEO_PROCESS_STATES.PROCESSING,
-    };
-
-    await triggerTranscodingJob(job);
-
-    console.log("Triggered transcoding job");
-
-    /*
-    const video = await Video.create({
-      fileName: fileName,
-      objectKey: key,
-      owner:req.user._id,
-      progress: VIDEO_PROCESS_STATES.PROCESSING,
-    });
-
-    if (!video) {
-      return res.status(500).json({
-        message: "Failed to create video. Please try again later.",
-      });
-    }
-    */
-
-    await Video.findOneAndUpdate(
-      { objectKey: job.objectKey },
-      {
-        $set: { progress: job.progress },
-      }
-    );
-
-    return res.status(200).json({
-      message: "Video transcoding job triggered for " + fileName,
-    });
-  } else {
-    //enqueue the job
-    const job = {
-      fileName,
-      objectKey: key,
-      progress: VIDEO_PROCESS_STATES.QUEUED,
-    };
-
-    await enqueueJobInQueue(job);
-
-    return res.status(200).json({
-      message: "Job enqueued successfully for " + fileName,
-    });
-  }
+  return res.status(200).json({ message: "Video transcoding job accepted for " + video.fileName });
 });
 
+// Status callbacks from the transcoding container.
 const handleECSTrigger = asyncHandler(async (req, res) => {
-  console.log("Trigger from ECS.....");
-  //webhook
-  const { key, progress, videoResolutions } = req.body;
+  const { key, jobId, progress, videoResolutions } = req.body || {};
 
-  // await connectDB();
+  // Each container holds a token derived from its own job id, so it can only report on that job.
+  if (config.webhookSecret && !verifyJobToken(jobId, req.get("x-job-token"), config.webhookSecret)) {
+    return res.status(401).json({ message: "Invalid job credentials" });
+  }
+  if (jobId && !/^[a-f0-9]{24}$/i.test(String(jobId))) {
+    return res.status(400).json({ message: "Invalid job id" });
+  }
 
-  const video = await Video.findOne({ objectKey: key });
+  const lookup = webhookVideoQuery({ key, jobId });
+  const video = await (lookup.sort ? Video.findOne(lookup.filter).sort(lookup.sort) : Video.findOne(lookup.filter));
 
   if (!video) {
     return res.status(404).json({ message: "video not found!" });
   }
 
+  if (progress === VIDEO_PROCESS_STATES.PROCESSING) {
+    // The container is up (STARTING -> PROCESSING). The job still holds its slot, so don't release it.
+    // Never move a finished job backwards if pings arrive out of order.
+    if (video.progress === VIDEO_PROCESS_STATES.STARTING || video.progress === VIDEO_PROCESS_STATES.QUEUED) {
+      video.progress = VIDEO_PROCESS_STATES.PROCESSING;
+      await video.save();
+    }
+    return res.status(200).json({ message: "Processing state recorded" });
+  }
+
+  if (progress !== VIDEO_PROCESS_STATES.COMPLETED && progress !== VIDEO_PROCESS_STATES.FAILED) {
+    return res.status(400).json({ message: `Unknown progress "${progress}"` });
+  }
+
+  // A retried webhook must not release a second slot for the same job.
+  const alreadyFinished =
+    video.progress === VIDEO_PROCESS_STATES.COMPLETED || video.progress === VIDEO_PROCESS_STATES.FAILED;
+
   if (progress === VIDEO_PROCESS_STATES.COMPLETED) {
+    // Only known renditions, and only bare file names (the server builds the full key itself).
+    const safe = {};
+    for (const rung of RUNGS) {
+      const file = videoResolutions && videoResolutions[rung];
+      if (typeof file === "string" && file && !file.includes("/") && !file.includes("..")) safe[rung] = file;
+    }
     video.progress = VIDEO_PROCESS_STATES.COMPLETED;
-    video.videoResolutions = videoResolutions;
+    video.videoResolutions = safe;
     await video.save();
-    await deleteObjectFile(key); // deleted the file from temp s3 bucket
-  }
-
-  if (progress === VIDEO_PROCESS_STATES.FAILED) {
+    await deleteObjectFile(video.objectKey); // deleted the file from temp s3 bucket
+  } else {
     video.progress = VIDEO_PROCESS_STATES.FAILED;
-    video.videoResolutions = videoResolutions;
     await video.save();
   }
 
-  await decrement(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT);
+  // Free this job's slot and immediately start the next queued job(s).
+  const started = alreadyFinished ? await dispatchAvailable() : await onJobFinished();
 
-  const currentJobCount = parseInt(
-    await getKey(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT)
-  );
-
-  const queueLength = await getQueueLength();
-
-  if (queueLength === 0) {
-    if (currentJobCount > 0) {
-      await setKey(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT, 0);
-    }
-
-    console.log("Trigger from ECS: Processing queue is empty.");
-    return res.status(200).json({
-      message: "Trigger from ECS: Queue is empty",
-    });
-  }
-
-  const availableSlots = 5 - currentJobCount;
-
-  if (availableSlots > 0) {
-    for (const i = 0; i < availableSlots; i++) {
-      let job = await deQueueJobFromQueue();
-      job.progress = VIDEO_PROCESS_STATES.PROCESSING;
-
-      await increment(REDIS_KEYS.CURRENT_VIDEO_TRANSCODING_JOB_COUNT);
-      await triggerTranscodingJob(job);
-
-      await Video.findOneAndUpdate(
-        { objectKey: job.objectKey },
-        {
-          $set: { progress: job.progress },
-        }
-      );
-
-      console.log("Transcoding job triggered successfully for:", job.fileName);
-    }
-
-    return res.status(200).json({
-      message:
-        "Trigger from ECS: " + availableSlots + " jobs triggered successfully",
-    });
-  }
+  return res.status(200).json({
+    message: `Trigger from ECS: ${started} queued job(s) started`,
+  });
 });
 
 module.exports = { handleS3Trigger, handleECSTrigger };

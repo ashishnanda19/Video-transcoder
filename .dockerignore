@@ -1,0 +1,15 @@
+.git
+**/node_modules
+**/.next
+**/out
+**/.env
+**/*.log
+infra
+docs
+assets
+ecs-task
+upload-trigger-api
+server/test
+server/Dockerfile
+*.pkg
+*.zip

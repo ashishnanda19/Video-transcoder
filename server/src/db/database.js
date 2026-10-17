@@ -20,7 +20,7 @@ const connectDB = async () => {
       }
     }
 
-    const connectionInstance = await mongoose.connect(baseUri);
+    const connectionInstance = await mongoose.connect(baseUri, { serverSelectionTimeoutMS: 15000 });
 
     // console.log(connectionInstance);
     console.log(

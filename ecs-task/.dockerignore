@@ -1,1 +1,4 @@
 .env
+node_modules
+benchmark/out
+*.mp4

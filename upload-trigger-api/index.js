@@ -1,33 +1,33 @@
 const axios = require("axios");
+const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm"); // provided by the Lambda runtime
 require("dotenv").config();
 
+let cachedSecret;
+// The shared secret lives in SSM Parameter Store (SecureString), never in the function's environment variables.
+async function getSecret() {
+  if (cachedSecret !== undefined) return cachedSecret;
+  if (process.env.WEBHOOK_SECRET) return (cachedSecret = process.env.WEBHOOK_SECRET); // local/offline testing
+  const name = process.env.WEBHOOK_SECRET_PARAM;
+  if (!name) return (cachedSecret = "");
+  const res = await new SSMClient({}).send(new GetParameterCommand({ Name: name, WithDecryption: true }));
+  return (cachedSecret = res.Parameter.Value);
+}
+
 module.exports.handler = async (event) => {
-  try {
-    // Extract S3 object details from the event
-    console.log(event)
-    const s3EventData = event.Records[0].s3;
+  const secret = await getSecret();
+  const records = (event.Records || []).filter((r) => r.s3 && r.s3.object);
+  console.log(`Received S3 event with ${records.length} record(s)`);
 
-    console.log("Received S3 event with object details:", s3EventData);
-
-    const response = await axios.post(process.env.API_ENDPOINT, {
-      s3EventData,
-    });
-
-    // Log API response status and key content
-    console.log(
-      "API response received:",
-      `Status: ${response.status}, Data: ${JSON.stringify(response.data)}`
+  for (const record of records) {
+    console.log("Forwarding object:", record.s3.object.key);
+    // Any failure throws, so Lambda retries the (asynchronous) invocation; the server ignores duplicates.
+    const response = await axios.post(
+      process.env.API_ENDPOINT,
+      { s3EventData: record.s3 },
+      { headers: secret ? { "X-Webhook-Secret": secret } : {}, timeout: 20000 }
     );
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify("S3 event process successful"),
-    };
-  } catch (error) {
-    console.error("Error processing S3 object data:", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify("Error processing S3 upload"),
-    };
+    console.log("API response received:", `Status: ${response.status}, Data: ${JSON.stringify(response.data)}`);
   }
+
+  return { statusCode: 200, body: JSON.stringify("S3 event process successful") };
 };

@@ -1,0 +1,10 @@
+{
+  "CORSRules": [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["GET", "PUT", "POST", "DELETE"],
+      "AllowedOrigins": ["https://video-transcoder-five.vercel.app"],
+      "ExposeHeaders": []
+    }
+  ]
+}

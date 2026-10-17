@@ -1,76 +1,178 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
- 
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
+    --background: 0 0% 99%;
+    --foreground: 240 15% 8%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
- 
+    --card-foreground: 240 15% 8%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
- 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
- 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
- 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
- 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
- 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
- 
-    --radius: 0.5rem;
+    --popover-foreground: 240 15% 8%;
+    --primary: 252 92% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 8% 95%;
+    --secondary-foreground: 240 10% 12%;
+    --muted: 240 8% 95%;
+    --muted-foreground: 240 5% 42%;
+    --accent: 250 45% 95%;
+    --accent-foreground: 252 70% 40%;
+    --destructive: 0 78% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 62% 34%;
+    --warning: 33 92% 42%;
+    --info: 212 92% 48%;
+    --border: 240 8% 90%;
+    --input: 240 8% 88%;
+    --ring: 252 92% 60%;
+    --radius: 0.85rem;
+    --brand-from: 256 95% 64%;
+    --brand-via: 226 92% 60%;
+    --brand-to: 198 90% 40%;
   }
- 
+
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
- 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
- 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
- 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
- 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
- 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
- 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
- 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
- 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 240 14% 4.5%;
+    --foreground: 240 10% 96%;
+    --card: 240 12% 7.5%;
+    --card-foreground: 240 10% 96%;
+    --popover: 240 12% 8%;
+    --popover-foreground: 240 10% 96%;
+    --primary: 252 100% 70%;
+    --primary-foreground: 240 30% 6%;
+    --secondary: 240 8% 12%;
+    --secondary-foreground: 240 10% 96%;
+    --muted: 240 8% 12%;
+    --muted-foreground: 240 6% 64%;
+    --accent: 252 32% 16%;
+    --accent-foreground: 252 100% 84%;
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 60% 48%;
+    --warning: 38 95% 58%;
+    --info: 210 95% 66%;
+    --border: 240 7% 15%;
+    --input: 240 7% 18%;
+    --ring: 252 100% 70%;
+    --brand-from: 256 100% 72%;
+    --brand-via: 222 100% 68%;
+    --brand-to: 190 95% 56%;
+  }
+
+  * { @apply border-border; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv11", "ss01", "tnum" 0;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection { background: hsl(var(--primary) / 0.28); }
+  :focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; border-radius: 6px; }
+
+  /* slim, theme-aware scrollbars */
+  * { scrollbar-width: thin; scrollbar-color: hsl(var(--border)) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; border: 2px solid hsl(var(--background)); }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
   }
 }
- 
-@layer base {
-  * {
-    @apply border-border;
+
+@layer utilities {
+  .bg-brand {
+    background-image: linear-gradient(120deg, hsl(var(--brand-from)), hsl(var(--brand-via)) 55%, hsl(var(--brand-to)));
   }
-  body {
-    @apply bg-background text-foreground;
+  /* filled surfaces that carry white text (buttons, badges, bars): darker end stops keep contrast >= ~4.5:1 */
+  .bg-brand-strong {
+    background-image: linear-gradient(120deg, hsl(256 90% 62%), hsl(230 88% 57%) 55%, hsl(207 92% 44%));
   }
+  /* large panels with white headline text */
+  .bg-brand-deep-animated {
+    background-image: linear-gradient(120deg, hsl(258 80% 46%), hsl(232 80% 43%), hsl(209 88% 37%), hsl(258 80% 46%));
+    background-size: 300% 100%;
+  }
+  .bg-brand-animated {
+    background-image: linear-gradient(120deg, hsl(var(--brand-from)), hsl(var(--brand-via)), hsl(var(--brand-to)), hsl(var(--brand-from)));
+    background-size: 300% 100%;
+  }
+  .text-gradient {
+    @apply bg-brand bg-clip-text text-transparent;
+  }
+  .text-balance { text-wrap: balance; }
+  .glass {
+    @apply border bg-card/70 backdrop-blur-xl;
+  }
+  /* faint engineering-paper grid that fades out toward the edges */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--foreground) / 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--foreground) / 0.045) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 100%);
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 100%);
+  }
+  .noise::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.035; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+}
+
+/* ---- closing-section demo: a file drops in, uploads, and four versions pop out (loops every 6.5 s) ---- */
+@layer utilities {
+  .cta-file { animation: cta-file 6.5s cubic-bezier(.4,0,.2,1) infinite; }
+  .cta-progress { animation: cta-progress 6.5s linear infinite; }
+  .cta-chip { animation: cta-chip 6.5s cubic-bezier(.34,1.4,.64,1) infinite; animation-delay: calc(var(--i, 0) * 0.22s); }
+  .cta-cursor { animation: cta-cursor 6.5s cubic-bezier(.4,0,.2,1) infinite; }
+}
+@keyframes cta-file {
+  0% { opacity: 0; transform: translate(150px, -80px) rotate(10deg) scale(.92); }
+  10% { opacity: 1; }
+  28% { opacity: 1; transform: translate(0, 0) rotate(0) scale(1); }
+  42% { opacity: 1; transform: translate(0, 0) scale(1); }
+  50% { opacity: 0; transform: translate(0, 8px) scale(.9); }
+  100% { opacity: 0; transform: translate(0, 8px) scale(.9); }
+}
+@keyframes cta-cursor {
+  0% { opacity: 0; transform: translate(190px, -110px); }
+  8% { opacity: 1; }
+  28% { opacity: 1; transform: translate(34px, 8px); }
+  34% { opacity: 1; transform: translate(34px, 8px) scale(.9); }
+  46% { opacity: 0; transform: translate(34px, 8px); }
+  100% { opacity: 0; }
+}
+@keyframes cta-progress {
+  0%, 30% { width: 0; opacity: 0; }
+  34% { opacity: 1; }
+  54% { width: 100%; opacity: 1; }
+  60% { width: 100%; opacity: 0; }
+  100% { width: 0; opacity: 0; }
+}
+@keyframes cta-chip {
+  0%, 57% { opacity: 0; transform: translateY(14px) scale(.85); }
+  66% { opacity: 1; transform: translateY(0) scale(1); }
+  92% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-4px) scale(.98); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cta-chip { animation: none; opacity: 1; transform: none; }
+  .cta-file, .cta-progress, .cta-cursor { animation: none; opacity: 0; }
+}
+
+/* ---- CUDA section: four encoder lanes running side by side ---- */
+@layer utilities {
+  .cuda-lane { animation: cuda-lane 3.2s cubic-bezier(.4,0,.2,1) infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
+  .cuda-flow { animation: cuda-flow 1.6s linear infinite; }
+}
+@keyframes cuda-lane {
+  0% { width: 4%; }
+  70%, 88% { width: 100%; }
+  100% { width: 4%; }
+}
+@keyframes cuda-flow { to { background-position: 24px 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .cuda-lane { animation: none; width: 100%; }
+  .cuda-flow { animation: none; }
 }
