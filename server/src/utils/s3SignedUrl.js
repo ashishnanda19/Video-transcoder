@@ -11,11 +11,9 @@ const accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.MY_AWS_ACCESS_K
 const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.MY_AWS_SECRET_ACCESS_KEY;
 
 const s3Client = new S3Client({
-  region: "ap-south-1",
-  credentials: {
-    accessKeyId,
-    secretAccessKey,
-  },
+  region: process.env.AWS_REGION || "ap-south-1",
+  // No static keys configured -> the SDK default chain (AWS_PROFILE, SSO, role).
+  ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
 });
 
 async function getObjectURL(key, bucketName) {

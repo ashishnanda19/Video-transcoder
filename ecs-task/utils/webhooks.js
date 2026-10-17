@@ -2,11 +2,18 @@ const axios = require("axios");
 const { VIDEO_PROCESS_STATES } = require("./constants.js");
 
 const webhook = process.env.WEBHOOK_URL;
-console.log("Webhook URL:", webhook);
+console.log("Webhook URL:", webhook || "(not set: status callbacks are skipped)");
+
+// With no WEBHOOK_URL (e.g. scripts/verify-aws.js, where nothing public can receive the callback) the job still
+// runs; the caller reads the result from ECS/S3 instead. A set-but-failing webhook still fails the job.
+const post = async (body) => {
+  if (!webhook) return { status: 200, skipped: true };
+  return axios.post(webhook, body);
+};
 
 const markTaskCompleted = async (key, allFilesObjects) => {
   try {
-    const response = await axios.post(webhook, {
+    const response = await post({
       key,
       progress: VIDEO_PROCESS_STATES.COMPLETED,
       videoResolutions: allFilesObjects,
@@ -26,7 +33,7 @@ const markTaskCompleted = async (key, allFilesObjects) => {
 // Best effort: a lost "processing" ping must never fail the job.
 const markTaskProcessing = async (key) => {
   try {
-    await axios.post(webhook, { key, progress: VIDEO_PROCESS_STATES.PROCESSING, videoResolutions: {} });
+    await post({ key, progress: VIDEO_PROCESS_STATES.PROCESSING, videoResolutions: {} });
   } catch (error) {
     console.log("Could not report processing state (continuing):", error.message);
   }
@@ -34,7 +41,7 @@ const markTaskProcessing = async (key) => {
 
 const markTaskFailed = async (key) => {
   try {
-    const response = await axios.post(webhook, {
+    const response = await post({
       key,
       progress: VIDEO_PROCESS_STATES.FAILED,
       videoResolutions: {},

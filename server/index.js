@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const { connectDB } = require("./src/db/database.js");
 const cors = require("cors");
 const { connectPassport } = require("./src/utils/Provider.js");
+const { authDisabled } = require("./src/middlewares/auth.middleware.js");
 const session = require("express-session");
 const passport = require("passport");
 const dotenv = require("dotenv");
@@ -33,9 +34,10 @@ app.use(
     proxy: true,
 
     cookie: {
-      secure: true,
+      // Secure cross-site cookies need HTTPS; on http://localhost they would never be stored.
+      secure: process.env.NODE_ENV === "production",
       httpOnly: true,
-      sameSite: "none",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     },
   })
 );
@@ -56,7 +58,11 @@ app.enable("trust proxy");
 app.use(passport.initialize());
 app.use(passport.session());
 
-connectPassport();
+if (authDisabled()) {
+  console.warn("AUTH_DISABLED=true: Google login is OFF, every request acts as the local dev user. Never use this on a public server.");
+} else {
+  connectPassport();
+}
 
 app.get("/", (req, res, next) => {
   return res.status(200).json({

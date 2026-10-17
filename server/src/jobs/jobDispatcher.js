@@ -12,6 +12,9 @@ console.log(
   `Limiter: mode=${config.mode} maxConcurrentJobs=${config.maxConcurrentJobs} leakRate=${config.leakRate}/tick ` +
     `interval=${config.leakIntervalMs}ms derived=${JSON.stringify(config.derived)}`
 );
+if (!process.env.WEBHOOK_URL) {
+  console.warn("WEBHOOK_URL is not set: containers will not report back, so jobs will stay in 'starting' forever.");
+}
 config.warnings.forEach((w) => console.warn(`Limiter warning: ${w}`));
 
 const dispatcher = createDispatcher({

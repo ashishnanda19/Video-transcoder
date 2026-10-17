@@ -29,10 +29,8 @@ function buildRunTaskInput(job, env = process.env) {
     { name: "TEMP_S3_BUCKET_NAME", value: tempBucket },
     { name: "BUCKET", value: tempBucket }, // Alias for older code
     { name: "FINAL_S3_BUCKET_NAME", value: finalBucket },
-    {
-      name: "WEBHOOK_URL",
-      value: env.WEBHOOK_URL || "https://video-transcoder-server-vvep.onrender.com/api/v1/video/ecs-trigger",
-    },
+    // Must be reachable FROM AWS (a public URL or tunnel). Omitted when unset: the worker then skips callbacks.
+    ...(env.WEBHOOK_URL ? [{ name: "WEBHOOK_URL", value: env.WEBHOOK_URL }] : []),
     { name: "TRANSCODE_MODE", value: mode },
     ...PASSTHROUGH_ENV.filter((n) => env[n]).map((n) => ({ name: n, value: env[n] })),
   ];
