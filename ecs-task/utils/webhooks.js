@@ -21,6 +21,17 @@ const markTaskCompleted = async (key, allFilesObjects) => {
   }
 };
 
+// Tells the server the container is actually up (STARTING -> PROCESSING). On the GPU path this fires only
+// after the ASG scaled out, the image was pulled and the container started, so it is the real "work began".
+// Best effort: a lost "processing" ping must never fail the job.
+const markTaskProcessing = async (key) => {
+  try {
+    await axios.post(webhook, { key, progress: VIDEO_PROCESS_STATES.PROCESSING, videoResolutions: {} });
+  } catch (error) {
+    console.log("Could not report processing state (continuing):", error.message);
+  }
+};
+
 const markTaskFailed = async (key) => {
   try {
     const response = await axios.post(webhook, {
@@ -39,6 +50,7 @@ const markTaskFailed = async (key) => {
 };
 
 module.exports = {
+  markTaskProcessing,
   markTaskCompleted,
   markTaskFailed,
 };
