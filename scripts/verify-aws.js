@@ -5,7 +5,9 @@
 //   node scripts/verify-aws.js e2e --mode cpu [--input f.mp4]  REAL run: upload -> Lambda -> ECS task -> S3 outputs (Fargate, ~cents)
 //   node scripts/verify-aws.js e2e --mode gpu --yes            same on the GPU instance (needs the G/VT quota; ~$0.15-0.30)
 //
-// Options: --region ap-south-1  --prefix vidflow  --keep (don't delete test objects)  --timeout-min 30
+// Options: --region ap-south-1  --prefix vidflow  --profile vidflow  --avoid aegis  --keep (don't delete test objects)  --timeout-min 30
+//   --profile  AWS CLI profile to use (same as AWS_PROFILE). Use one dedicated to VidFlow.
+//   --avoid    name of ANOTHER project sharing this AWS account; the Isolation checks prove VidFlow cannot touch it.
 //
 // e2e builds the RunTask request with the SAME code the server uses (server/src/utils/runTaskInput.js), so a pass
 // here means the server's launch path is valid. It deliberately sets no WEBHOOK_URL (nothing public can receive it
@@ -21,11 +23,13 @@ const ROOT = path.resolve(__dirname, "..");
 
 // ---------------------------------------------------------------- args
 function parseArgs(argv) {
-  const a = { cmd: argv[2], region: "ap-south-1", prefix: "vidflow", mode: "cpu", timeoutMin: 30, yes: false, keep: false };
+  const a = { cmd: argv[2], region: "ap-south-1", prefix: "vidflow", mode: "cpu", timeoutMin: 30, yes: false, keep: false, avoid: ["aegis"] };
   for (let i = 3; i < argv.length; i++) {
     const k = argv[i];
     if (k === "--region") a.region = argv[++i];
     else if (k === "--prefix") a.prefix = argv[++i];
+    else if (k === "--profile") process.env.AWS_PROFILE = argv[++i];
+    else if (k === "--avoid") a.avoid = argv[++i].split(",");
     else if (k === "--mode") a.mode = argv[++i];
     else if (k === "--input") a.input = argv[++i];
     else if (k === "--timeout-min") a.timeoutMin = Number(argv[++i]);
@@ -108,6 +112,7 @@ async function preflight(ctx) {
   await check("AWS credentials", async () => {
     const id = await aws(["sts", "get-caller-identity"]);
     ctx.account = id.Account;
+    ctx.callerArn = id.Arn;
     return `${id.Arn} (account ${id.Account})`;
   }, "aws configure / aws sso login, and make sure it is the NEW account");
 
@@ -232,6 +237,47 @@ async function preflight(ctx) {
       return { status: "FAIL", detail: `quota is ${q.Value}`, hint: `aws service-quotas request-service-quota-increase --service-code ec2 --quota-code L-DB2E81BA --desired-value 8 --region ${REGION}` };
     }
     return `${q.Value} vCPU`;
+  });
+
+  console.log("\nIsolation from other projects in this account");
+  const avoidRe = new RegExp(ctx.avoid.join("|"), "i");
+  await check(`Credentials do not belong to another project (${ctx.avoid.join(", ")})`, async () => {
+    if (avoidRe.test(ctx.callerArn || "")) {
+      return { status: "FAIL", detail: ctx.callerArn, hint: "use a VidFlow-only profile: --profile vidflow (or AWS_PROFILE); see docs/gpu-migration.md#isolation-from-other-projects" };
+    }
+    return ctx.callerArn;
+  });
+  await check("Task definitions only use vidflow-* IAM roles", async () => {
+    const bad = [];
+    for (const fam of [names.gpuFamily, names.cpuFamily]) {
+      const td = (await aws(["ecs", "describe-task-definition", "--task-definition", fam], { allowFail: true }) || {}).taskDefinition;
+      if (!td) continue;
+      for (const arn of [td.taskRoleArn, td.executionRoleArn]) if (arn && !new RegExp(`role/${prefix}-`).test(arn)) bad.push(arn);
+    }
+    if (bad.length) return { status: "FAIL", detail: bad.join(", ") };
+  });
+  await check("Every VidFlow principal is denied access to other projects' buckets", async () => {
+    const all = (await aws(["s3api", "list-buckets"])).Buckets.map((b) => b.Name);
+    const foreign = all.filter((b) => b !== names.temp && b !== names.final);
+    const principals = [taskRoleArn && taskRoleArn.Arn, serverUser && serverUser.User.Arn].filter(Boolean);
+    if (!principals.length) return { status: "SKIP", detail: "VidFlow principals not created yet" };
+    if (!foreign.length) return "no other buckets in the account";
+    const leaks = [];
+    for (const arn of principals) {
+      for (const b of foreign) {
+        for (const action of ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]) {
+          if (await sim(arn, action, `arn:aws:s3:::${b}/probe.txt`)) leaks.push(`${arn.split("/").pop()} can ${action} ${b}`);
+        }
+      }
+    }
+    if (leaks.length) return { status: "FAIL", detail: leaks.slice(0, 3).join("; ") };
+    return `${principals.length} principals x ${foreign.length} foreign bucket(s) (${foreign.join(", ")}): all denied`;
+  });
+  await check("VidFlow resources carry the Project=vidflow tag", async () => {
+    const r = await aws(["resourcegroupstaggingapi", "get-resources", "--tag-filters", "Key=Project,Values=vidflow"]);
+    const n = r.ResourceTagMappingList.length;
+    if (!n) return { status: "WARN", detail: "no tagged resources found yet" };
+    return `${n} tagged resources`;
   });
 }
 

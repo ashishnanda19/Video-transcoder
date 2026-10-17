@@ -13,6 +13,8 @@ the transcoding itself runs in AWS (Fargate CPU now, GPU once the quota is appro
 
 ## Level A: verify the AWS stack
 
+> **Use a VidFlow-only AWS profile** (`export AWS_PROFILE=vidflow`, see *Isolation* in `docs/gpu-migration.md`). The verifier and Terraform both refuse another project's (`aegis`) credentials.
+
 ```bash
 # 0. See what is deployed and what is missing (read-only, free)
 node scripts/verify-aws.js preflight
@@ -61,7 +63,7 @@ REDIS_URL=redis://127.0.0.1:6379
 SESSION_SECRET=anything-local
 FRONTEND_URL=http://localhost:3000
 AUTH_DISABLED=true            # skips Google login; refused when NODE_ENV=production
-AWS_PROFILE=default           # or MY_AWS_ACCESS_KEY_ID/MY_AWS_SECRET_ACCESS_KEY of the vidflow-server user (tests its IAM policy)
+AWS_PROFILE=vidflow           # NOT another project's profile. Or MY_AWS_ACCESS_KEY_ID/MY_AWS_SECRET_ACCESS_KEY of the vidflow-server user (tests its IAM policy)
 WEBHOOK_URL=https://<tunnel>/api/v1/video/ecs-trigger
 # the rest comes from:  cd infra && terraform output server_env   (set TRANSCODE_MODE=cpu until the GPU is ready)
 ```

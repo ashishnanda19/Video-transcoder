@@ -104,7 +104,7 @@ aws ecs list-tasks --cluster vidflow-gpu --region ap-south-1
 cd infra && terraform destroy
 # Verify nothing is left billing:
 aws ec2 describe-instances --region ap-south-1 --filters Name=instance-state-name,Values=running,pending \
-  Name=tag:AmazonECSManaged,Values=true --query 'Reservations[].Instances[].InstanceId'
+  Name=tag:Project,Values=vidflow --query 'Reservations[].Instances[].InstanceId'
 ```
 
 `terraform destroy` removes everything it created: the ASG (`force_delete`), clusters, Lambda, ECR repos (with images), roles, the IAM user, alarms and the **temp bucket**. The **final bucket is kept safe**: destroy fails if it still holds transcoded videos unless you set `final_bucket_force_destroy = true` (or empty it first). Access keys you created with the CLI must be deleted first (`aws iam delete-access-key`) or the user cannot be removed. MongoDB, Redis, Render and Vercel are not touched.
@@ -218,6 +218,38 @@ aws budgets create-budget --account-id <ACCOUNT_ID> \
   --budget '{"BudgetName":"vidflow-monthly","BudgetLimit":{"Amount":"100","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST"}' \
   --notifications-with-subscribers '[{"Notification":{"NotificationType":"ACTUAL","ComparisonOperator":"GREATER_THAN","Threshold":50,"ThresholdType":"PERCENTAGE"},"Subscribers":[{"SubscriptionType":"EMAIL","Address":"you@example.com"}]}]'
 ```
+
+## Isolation from other projects
+
+VidFlow shares an AWS account with other projects (currently `aegis`: `aegis-*` IAM user/roles, `aegis-evidence-*` and `aegis-frontend-*` buckets).
+Rules this repo enforces:
+
+| | VidFlow | How it is kept separate |
+|---|---|---|
+| Names | every resource is `vidflow-*`, buckets `video-transcoder-*`, Lambda `video-transcoder-upload-trigger` | no shared roles, buckets, clusters, repos, SGs |
+| Tags | `Project=vidflow` (provider default tags, plus the launch template for instances/volumes) | cost reports and teardown filters select only VidFlow |
+| IAM | own instance / execution / task roles and the `vidflow-server` user, each limited to the two VidFlow buckets | `verify-aws.js preflight` simulates them against every other bucket in the account and requires "denied" |
+| Terraform state | `infra/terraform.tfstate`, local and git-ignored | never mixed with another project's state |
+| Deploy identity | **its own profile**; Terraform refuses credentials whose ARN contains `aegis` (`forbidden_identity_substrings`) unless you set `allow_shared_deploy_identity = true` | the check fails at plan time, before anything is created |
+
+Genuinely shared, and unavoidable: the AWS account itself, its default VPC (VidFlow only reads it and adds its own security groups), and the account-wide
+EC2 *G and VT* vCPU quota (raising it for VidFlow also raises it for anyone else in the account).
+
+**Set up a VidFlow-only deploy identity** (once, with an admin identity; the console is fine):
+
+```bash
+aws iam create-user --user-name vidflow-deploy
+# Attach the permissions Terraform needs (IAM, ECS, EC2/ASG, ECR, S3, Lambda, Logs, SNS, CloudWatch, SSM read, Service Quotas).
+# AdministratorAccess is the quick start; it is as powerful as any other deploy user, so tighten it to vidflow-* ARNs later.
+aws iam attach-user-policy --user-name vidflow-deploy --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+aws iam create-access-key --user-name vidflow-deploy        # then:
+aws configure --profile vidflow                               # paste that key
+aws sts get-caller-identity --profile vidflow                 # must show user/vidflow-deploy
+```
+
+Then use it everywhere: `export AWS_PROFILE=vidflow` (or `aws_profile = "vidflow"` in `terraform.tfvars`, and `--profile vidflow` on `scripts/verify-aws.js`).
+Also pin the account with `allowed_account_ids = ["<id>"]` so Terraform can never run against a different one.
+Do not reuse another project's access keys for the Render/local server either: the server uses the `vidflow-server` user.
 
 ## Rolling back to CPU
 

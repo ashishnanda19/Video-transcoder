@@ -1,5 +1,7 @@
 # cp terraform.tfvars.example terraform.tfvars   (terraform.tfvars is git-ignored)
 region               = "ap-south-1"
+aws_profile          = "vidflow"            # a profile that is NOT another project's (see docs/gpu-migration.md, Isolation)
+# allowed_account_ids = ["027738434026"]
 asg_max_size         = 2
 alarm_email          = "you@example.com"
 billing_alarm_usd    = 50

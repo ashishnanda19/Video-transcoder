@@ -45,9 +45,16 @@ resource "aws_launch_template" "gpu" {
   EOT
   )
 
+  # provider default_tags do not reach instances launched by the ASG; tag them so teardown/cost filters can
+  # select VidFlow's instances (and never another project's ECS instances in the same account).
   tag_specifications {
     resource_type = "instance"
-    tags          = { Name = "${local.cluster}-instance" }
+    tags          = { Name = "${local.cluster}-instance", Project = "vidflow", Stack = "gpu-transcoding" }
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+    tags          = { Project = "vidflow", Stack = "gpu-transcoding" }
   }
 }
 

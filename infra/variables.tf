@@ -136,3 +136,28 @@ variable "cpu_task_memory" {
   default     = 8192
   description = "Fargate memory (MiB) for the CPU rollback path. Must be a valid pair with cpu_task_cpu."
 }
+
+# ---- Isolation from other projects sharing this AWS account
+variable "aws_profile" {
+  type        = string
+  default     = null
+  description = "AWS CLI profile dedicated to VidFlow (e.g. `vidflow`). null = default credential chain / AWS_PROFILE."
+}
+
+variable "allowed_account_ids" {
+  type        = list(string)
+  default     = []
+  description = "If set, Terraform refuses to run against any other AWS account."
+}
+
+variable "forbidden_identity_substrings" {
+  type        = list(string)
+  default     = ["aegis"]
+  description = "Terraform refuses to run if the calling IAM identity's ARN contains any of these (credentials that belong to another project)."
+}
+
+variable "allow_shared_deploy_identity" {
+  type        = bool
+  default     = false
+  description = "Escape hatch: deploy even though the caller matches forbidden_identity_substrings. Leave false; use a vidflow-only profile."
+}

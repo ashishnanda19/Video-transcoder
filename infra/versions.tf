@@ -14,7 +14,10 @@ terraform {
 }
 
 provider "aws" {
-  region = var.region
+  region  = var.region
+  profile = var.aws_profile
+  # Refuse to run against any other account (set to your VidFlow account id).
+  allowed_account_ids = length(var.allowed_account_ids) > 0 ? var.allowed_account_ids : null
 
   default_tags {
     tags = {
@@ -26,6 +29,8 @@ provider "aws" {
 
 # Billing metrics only exist in us-east-1, whatever region the workload runs in.
 provider "aws" {
-  alias  = "billing"
-  region = "us-east-1"
+  alias               = "billing"
+  region              = "us-east-1"
+  profile             = var.aws_profile
+  allowed_account_ids = length(var.allowed_account_ids) > 0 ? var.allowed_account_ids : null
 }

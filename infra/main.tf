@@ -1,4 +1,15 @@
-data "aws_caller_identity" "current" {}
+data "aws_caller_identity" "current" {
+  # Hard stop (at plan time, before anything is created) when the credentials belong to another project that shares
+  # this AWS account. VidFlow gets its own identity so it can never be applied, or audited, as someone else's.
+  lifecycle {
+    postcondition {
+      condition = var.allow_shared_deploy_identity || !anytrue([
+        for s in var.forbidden_identity_substrings : strcontains(lower(self.arn), lower(s))
+      ])
+      error_message = "These AWS credentials (${self.arn}) belong to another project (matches forbidden_identity_substrings). Use a VidFlow-only profile: set aws_profile = \"vidflow\" (or export AWS_PROFILE=vidflow). Override only deliberately with allow_shared_deploy_identity = true."
+    }
+  }
+}
 
 data "aws_vpc" "default" {
   default = true
