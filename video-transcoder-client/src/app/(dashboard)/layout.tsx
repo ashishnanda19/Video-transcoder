@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import Sidebar from "@/components/shell/Sidebar";
 import Topbar from "@/components/shell/Topbar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   // Signed-out visitors are sent to /signin; while we find out who they are, show the shell with placeholders.
   const { loading, isAuthenticated } = useAuth({ requireAuth: true });
+  const pathname = usePathname();
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -22,7 +25,10 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
               <Skeleton className="h-64 w-full" />
             </div>
           ) : (
-            children
+            // a quick fade/slide on every page change makes navigation feel instant rather than abrupt
+            <motion.div key={pathname} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16, ease: "easeOut" }}>
+              {children}
+            </motion.div>
           )}
         </main>
       </div>
