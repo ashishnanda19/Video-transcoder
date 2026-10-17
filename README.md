@@ -1,3 +1,5 @@
+<p align="center"><img src="./assets/vidflow-logo.png" alt="VidFlow" width="120" /></p>
+
 # Video Transcoding System
 
 This project implements a distributed video transcoding system with a leaky bucket rate-limiting mechanism using Node.js, AWS services, Redis, and ffmpeg, aimed at automatically generating multiple resolutions of uploaded videos. It enhances accessibility and optimizes viewing experiences by providing users with options to preview and download videos in various resolutions.

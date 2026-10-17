@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-// The tile is a CSS gradient rather than an SVG gradient: SVG gradient ids are document-global, so a second copy of
-// the logo inside a hidden (display:none) sidebar would hijack the reference and the visible one would render blank.
+// The VidFlow mark: the supplied logo, shown as a rounded tile so it reads on both light and dark backgrounds.
 export function LogoMark({ className }: { className?: string }) {
   return (
-    <span className={cn("inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-brand-strong shadow-sm", className)} aria-hidden>
-      <svg viewBox="0 0 24 24" className="h-[52%] w-[52%] translate-x-[1px]" fill="#fff">
-        <path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l11-6.8a1 1 0 0 0 0-1.72l-11-6.8A1 1 0 0 0 8 5.2z" />
-      </svg>
-    </span>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/logo.png"
+      alt=""
+      width={32}
+      height={32}
+      aria-hidden
+      className={cn("inline-block h-8 w-8 shrink-0 rounded-[10px] bg-[#0a0c0f] object-cover shadow-sm ring-1 ring-black/10 dark:ring-white/15", className)}
+    />
   );
 }
 
