@@ -30,14 +30,18 @@ The design works without them. If AWS later verifies the account, a CDN can be p
 3. *Network Access* → **Add IP address → `0.0.0.0/0`**. Fargate tasks have no fixed IP, so Atlas cannot be IP-restricted without a ~$32/month NAT gateway; the protection is TLS plus the long password.
 4. *Connect → Drivers* → copy the `mongodb+srv://user:password@cluster….mongodb.net/` string.
 
+
 ### 2. Upstash Redis (free)
 1. https://console.upstash.com → *Create database*, region **ap-south-1**, TLS enabled.
 2. Copy the **ioredis** URL, which looks like `rediss://default:<password>@<host>.upstash.io:6379` (note the double *s*).
 
+
 ### 3. Google OAuth (the sign-in)
 Get the two URLs first:
 ```bash
-cd infra && AWS_PROFILE=vidflow terraform output google_oauth_authorized_origin google_oauth_redirect_uri
+cd infra
+AWS_PROFILE=vidflow terraform output -raw google_oauth_authorized_origin; echo   # Authorized JavaScript origin
+AWS_PROFILE=vidflow terraform output -raw google_oauth_redirect_uri; echo          # Authorized redirect URI
 ```
 1. https://console.cloud.google.com → create a project → *APIs & Services → OAuth consent screen*: **External**, app name `VidFlow`, your email as support + developer contact. Scopes: leave the defaults (`openid`, `email`, `profile`). Publishing status: **Testing**.
 2. Same screen → **Test users**: add every Google account that should be allowed in. (In *Testing* mode Google itself refuses everyone else, on top of the app's own allowlist.)
