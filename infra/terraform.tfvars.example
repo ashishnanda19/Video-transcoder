@@ -5,6 +5,9 @@ aws_profile          = "vidflow"            # a profile that is NOT another proj
 asg_max_size         = 2
 alarm_email          = "you@example.com"
 billing_alarm_usd    = 50
-lambda_api_endpoint  = "https://<your-render-app>.onrender.com/api/v1/video/s3-trigger"
-cors_allowed_origins = ["https://video-transcoder-five.vercel.app", "http://localhost:3000"]
+# --- going live (see docs/go-live.md)
+allowed_emails    = ["you@gmail.com"]   # Google accounts that may sign in; empty = nobody
+api_desired_count = 0                    # set to 1 after ./scripts/put-secrets.sh
+# transcode_mode  = "cpu"                # "gpu" once the G/VT quota and the GPU image exist
+# lambda_api_endpoint = "https://<tunnel>/api/v1/video/s3-trigger"   # only for testing a local server through a tunnel
 # subnet_ids         = ["subnet-aaa", "subnet-bbb"]   # public subnets; default = default VPC

@@ -65,6 +65,8 @@ FRONTEND_URL=http://localhost:3000
 AUTH_DISABLED=true            # skips Google login; refused when NODE_ENV=production
 AWS_PROFILE=vidflow           # NOT another project's profile. Or MY_AWS_ACCESS_KEY_ID/MY_AWS_SECRET_ACCESS_KEY of the vidflow-server user (tests its IAM policy)
 WEBHOOK_URL=https://<tunnel>/api/v1/video/ecs-trigger
+# WEBHOOK_SECRET=...            # optional locally. If set it must equal the production value in SSM, or the deployed Lambda's
+#                                 events are refused; leave it unset for plain local testing (production always requires it).
 # the rest comes from:  cd infra && terraform output server_env   (set TRANSCODE_MODE=cpu until the GPU is ready)
 ```
 
@@ -83,14 +85,17 @@ cd video-transcoder-client && npm install && NEXT_PUBLIC_BACKEND_URL=http://loca
 ```
 
 Upload a small video (the UI caps at 30 MB). Expected: Mongo status `queued → starting → processing → completed`, four files in the final bucket, preview works.
-The bucket CORS already allows `http://localhost:3000`. The tunnel URL changes each time you restart it, so repeat the `terraform apply -var …` (and update `WEBHOOK_URL`). When you are done, set `lambda_api_endpoint` back or `terraform destroy`.
+The bucket CORS already allows `http://localhost:3000`. The tunnel URL changes each time you restart it, so repeat the `terraform apply -var …` (and update `WEBHOOK_URL`). When you are done, run a plain `terraform apply` so the Lambda points at the deployed API again (see `docs/go-live.md`).
+
+For a quick scripted check that needs no tunnel and no browser (uploads, delivers the S3 event itself, follows the job, attacks the security rules):
+`node scripts/replay-frontend-flow.js --lambda-secret "$WEBHOOK_SECRET"` (needs `WEBHOOK_SECRET` set in `server/.env`).
 
 ## Signing in locally
 
 - **Default (`AUTH_DISABLED=true`)**: the "Login with Google" button sends you straight to `/upload` as a built-in dev user. No Google account or keys are involved. The server refuses this flag when `NODE_ENV=production`.
-- **Real Google login on localhost**: in Google Cloud Console create an OAuth client (type *Web application*), add the authorized redirect URI `http://localhost:8000/api/v1/user/login` and the origin `http://localhost:3000`, then in `server/.env` set
-  `AUTH_DISABLED=false`, `GOOGLE_CLIENT_ID=…`, `GOOGLE_CLIENT_SECRET=…`, `GOOGLE_CALLBACK_URL=http://localhost:8000/api/v1/user/login` and restart the server.
-  (Before this change the callback URL was hardcoded to the old Render host, so it could never work locally.)
+- **Real Google login on localhost**: in Google Cloud Console create an OAuth client (type *Web application*), add the authorized redirect URI `http://localhost:8000/api/v1/user/google/callback` and the origin `http://localhost:3000`, then in `server/.env` set
+  `AUTH_DISABLED=false`, `GOOGLE_CLIENT_ID=…`, `GOOGLE_CLIENT_SECRET=…`, `GOOGLE_CALLBACK_URL=http://localhost:8000/api/v1/user/google/callback` and `ALLOWED_EMAILS=you@gmail.com`, then restart the server.
+  Sign-in refuses everyone who is not on the allowlist, locally too. The production setup is in `docs/go-live.md`.
 
 ## Cost and cleanup
 

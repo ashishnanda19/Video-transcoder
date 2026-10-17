@@ -66,3 +66,36 @@ output "server_env" {
     AWS_REGION            = var.region
   }
 }
+
+# ---- Going live
+output "site_url" {
+  value       = local.public_url
+  description = "The public address of the app."
+}
+
+output "google_oauth_authorized_origin" {
+  value       = local.public_url
+  description = "Google Cloud Console > OAuth client > Authorized JavaScript origins"
+}
+
+output "google_oauth_redirect_uri" {
+  value       = "${local.public_url}/api/v1/user/google/callback"
+  description = "Google Cloud Console > OAuth client > Authorized redirect URIs (must match exactly)"
+}
+
+output "api_ecr_repository_url" {
+  value = aws_ecr_repository.api.repository_url
+}
+
+output "api_cluster" {
+  value = aws_ecs_cluster.api.name
+}
+
+output "api_service" {
+  value = aws_ecs_service.api.name
+}
+
+output "ssm_prefix" {
+  value       = local.ssm_prefix
+  description = "Parameter Store path the API reads its secrets from."
+}

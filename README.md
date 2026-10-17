@@ -53,6 +53,10 @@ The project is organized into several components:
 
 Transcoding can run on NVIDIA GPUs (NVDEC → CUDA scale → NVENC) on ECS-on-EC2 with an Auto Scaling Group that scales to **zero** when idle. It is switched with `TRANSCODE_MODE=gpu|cpu` on the server; the original Fargate/CPU path is kept. See [docs/gpu-migration.md](docs/gpu-migration.md) for deploy/teardown, cost, benchmarking, and the end-to-end test checklist.
 
+## Going live
+
+The app runs on AWS behind one https address (Google sign-in with an email allowlist, per-user ownership, authenticated webhooks), all defined in Terraform. See [docs/go-live.md](docs/go-live.md) for the 20-minute setup (MongoDB Atlas, Upstash Redis, Google OAuth) and operations, and [docs/local-testing.md](docs/local-testing.md) for running it on your machine.
+
 ## Features
 
 - Automatically transcodes uploaded videos into multiple resolutions (360p, 480p, 720p, 1080p).

@@ -103,14 +103,14 @@ variable "server_iam_user_name" {
 
 variable "cors_allowed_origins" {
   type        = list(string)
-  default     = ["https://video-transcoder-five.vercel.app", "http://localhost:3000"]
-  description = "Browser origins allowed to PUT uploads / GET videos via presigned URLs."
+  default     = ["http://localhost:3000"]
+  description = "EXTRA browser origins allowed to PUT uploads / GET videos via presigned URLs (the deployed site is always allowed)."
 }
 
 variable "lambda_api_endpoint" {
   type        = string
-  default     = "https://video-transcoder-server-vvep.onrender.com/api/v1/video/s3-trigger"
-  description = "Full URL of the server's S3 trigger endpoint (<render-url>/api/v1/video/s3-trigger). The default is derived from the host hardcoded in the server; change it to your real Render URL."
+  default     = ""
+  description = "Override the URL the upload Lambda calls (e.g. a tunnel for local testing). Empty = the deployed API at <site>/api/v1/video/s3-trigger."
 }
 
 variable "temp_upload_expiry_days" {
@@ -160,4 +160,46 @@ variable "allow_shared_deploy_identity" {
   type        = bool
   default     = false
   description = "Escape hatch: deploy even though the caller matches forbidden_identity_substrings. Leave false; use a vidflow-only profile."
+}
+
+# ---- Going live
+variable "api_desired_count" {
+  type        = number
+  default     = 0
+  description = "Number of API tasks. Keep 0 until the secrets exist in SSM (scripts/put-secrets.sh), then set 1."
+}
+
+variable "allowed_emails" {
+  type        = list(string)
+  default     = []
+  description = "Google accounts allowed to sign in. Empty + no domains = nobody can (fails closed)."
+}
+
+variable "allowed_email_domains" {
+  type        = list(string)
+  default     = []
+  description = "Whole email domains allowed to sign in (e.g. [\"example.com\"])."
+}
+
+variable "transcode_mode" {
+  type        = string
+  default     = "cpu"
+  description = "cpu = Fargate, gpu = the GPU capacity provider (needs the G/VT quota and the GPU image)."
+
+  validation {
+    condition     = contains(["cpu", "gpu"], var.transcode_mode)
+    error_message = "transcode_mode must be cpu or gpu."
+  }
+}
+
+variable "user_max_active_jobs" {
+  type        = number
+  default     = 3
+  description = "Videos one user may have in progress at once."
+}
+
+variable "user_daily_uploads" {
+  type        = number
+  default     = 20
+  description = "Uploads one user may start per rolling 24 hours."
 }

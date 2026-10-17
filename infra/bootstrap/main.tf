@@ -122,7 +122,7 @@ data "aws_iam_policy_document" "iam" {
     condition {
       test     = "StringEquals"
       variable = "iam:AWSServiceName"
-      values   = ["ecs.amazonaws.com", "autoscaling.amazonaws.com"]
+      values   = ["ecs.amazonaws.com", "autoscaling.amazonaws.com", "ops.apigateway.amazonaws.com"]
     }
   }
 }
@@ -398,8 +398,79 @@ data "aws_iam_policy_document" "app" {
   }
 }
 
+
 # ---------------------------------------------------------------------------------------------------------------
-# 4/4  Guardrails: explicit Deny. A Deny overrides every Allow above, whatever gets added later.
+# 5/5  API hosting: API Gateway (HTTP API + VPC link), Cloud Map, ECS services, SSM secrets
+# ---------------------------------------------------------------------------------------------------------------
+data "aws_iam_policy_document" "edge" {
+  # --- API Gateway (HTTP API in front of the private Fargate service)
+  statement {
+    sid = "ApiGatewayHttpApisAndVpcLinks"
+    actions = [
+      "apigateway:GET", "apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE",
+      "apigateway:TagResource", "apigateway:UntagResource",
+    ]
+    resources = [
+      "arn:aws:apigateway:*::/apis", "arn:aws:apigateway:*::/apis/*",
+      "arn:aws:apigateway:*::/vpclinks", "arn:aws:apigateway:*::/vpclinks/*",
+      "arn:aws:apigateway:*::/tags/*",
+    ]
+  }
+
+  # --- Cloud Map (private DNS the VPC link uses to find the API task) and the Route 53 zone it creates
+  statement {
+    sid       = "CloudMap"
+    actions   = ["servicediscovery:*"]
+    resources = ["*"]
+  }
+  statement {
+    sid = "Route53ForCloudMapNamespace"
+    actions = [
+      "route53:CreateHostedZone", "route53:DeleteHostedZone", "route53:GetHostedZone", "route53:ListHostedZones",
+      "route53:ListHostedZonesByName", "route53:ListHostedZonesByVPC", "route53:GetChange", "route53:ChangeResourceRecordSets",
+      "route53:ListResourceRecordSets", "route53:AssociateVPCWithHostedZone", "route53:ChangeTagsForResource", "route53:ListTagsForResource",
+    ]
+    resources = ["*"]
+  }
+
+  # --- ECS services (the API) in vidflow-* clusters only
+  statement {
+    sid = "EcsVidflowServices"
+    actions = [
+      "ecs:CreateService", "ecs:UpdateService", "ecs:DeleteService", "ecs:DescribeServices", "ecs:ListServices",
+      "ecs:TagResource", "ecs:UntagResource", "ecs:ListTagsForResource",
+    ]
+    resources = ["arn:aws:ecs:*:${local.acct}:service/${local.p}-*/*", "arn:aws:ecs:*:${local.acct}:cluster/${local.p}-*"]
+  }
+
+  # --- Secrets: SSM parameters under /vidflow/ only (values are set with scripts/put-secrets.sh, never in Terraform state)
+  statement {
+    sid = "SsmVidflowParameters"
+    actions = [
+      "ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath", "ssm:PutParameter", "ssm:DeleteParameter",
+      "ssm:DeleteParameters", "ssm:AddTagsToResource", "ssm:ListTagsForResource",
+    ]
+    resources = ["arn:aws:ssm:*:${local.acct}:parameter/${local.p}/*"]
+  }
+  statement {
+    sid       = "SsmDescribe"
+    actions   = ["ssm:DescribeParameters"]
+    resources = ["*"]
+  }
+  statement {
+    sid       = "KmsForSsmSecureStrings"
+    actions   = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
+    resources = ["*"]
+    condition {
+      test     = "StringLike"
+      variable = "kms:ViaService"
+      values   = ["ssm.*.amazonaws.com"]
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# Guardrails: explicit Deny. A Deny overrides every Allow above, whatever gets added later.
 # ---------------------------------------------------------------------------------------------------------------
 data "aws_iam_policy_document" "guardrails" {
   # Other projects in the account (e.g. aegis-*): never touchable by VidFlow's deploy identity.
@@ -407,7 +478,7 @@ data "aws_iam_policy_document" "guardrails" {
     sid    = "DenyOtherProjects"
     effect = "Deny"
     actions = [
-      "iam:*", "s3:*", "ecs:*", "ecr:*", "lambda:*", "logs:*", "sns:*", "cloudwatch:*", "autoscaling:*",
+      "iam:*", "s3:*", "ecs:*", "ecr:*", "lambda:*", "logs:*", "sns:*", "cloudwatch:*", "autoscaling:*", "ssm:*",
     ]
     resources = flatten([
       for x in var.protected_prefixes : [
@@ -427,6 +498,7 @@ data "aws_iam_policy_document" "guardrails" {
         "arn:aws:sns:*:*:${x}-*",
         "arn:aws:cloudwatch:*:*:alarm:${x}-*",
         "arn:aws:autoscaling:*:*:autoScalingGroup:*:autoScalingGroupName/${x}-*",
+        "arn:aws:ssm:*:*:parameter/${x}/*",
       ]
     ])
   }
@@ -453,6 +525,7 @@ locals {
     iam        = data.aws_iam_policy_document.iam.json
     compute    = data.aws_iam_policy_document.compute.json
     app        = data.aws_iam_policy_document.app.json
+    edge       = data.aws_iam_policy_document.edge.json
     guardrails = data.aws_iam_policy_document.guardrails.json
   }
   # IAM counts non-whitespace characters, max 6144 per managed policy.

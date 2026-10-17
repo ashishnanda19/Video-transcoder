@@ -50,6 +50,30 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+data "aws_iam_policy_document" "lambda_secret" {
+  statement {
+    sid       = "ReadWebhookSecret"
+    actions   = ["ssm:GetParameter"]
+    resources = ["${local.ssm_arn_prefix}/WEBHOOK_SECRET"]
+  }
+  statement {
+    sid       = "DecryptIt"
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+    condition {
+      test     = "StringLike"
+      variable = "kms:ViaService"
+      values   = ["ssm.${var.region}.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "lambda_secret" {
+  name   = "read-webhook-secret"
+  role   = aws_iam_role.lambda.id
+  policy = data.aws_iam_policy_document.lambda_secret.json
+}
+
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${local.lambda_name}"
   retention_in_days = var.log_retention_days
@@ -67,7 +91,9 @@ resource "aws_lambda_function" "upload_trigger" {
 
   environment {
     variables = {
-      API_ENDPOINT = var.lambda_api_endpoint
+      API_ENDPOINT = var.lambda_api_endpoint != "" ? var.lambda_api_endpoint : "${local.public_url}/api/v1/video/s3-trigger"
+      # The shared secret itself stays in SSM; the function fetches it when it starts.
+      WEBHOOK_SECRET_PARAM = "${local.ssm_prefix}/WEBHOOK_SECRET"
     }
   }
 
